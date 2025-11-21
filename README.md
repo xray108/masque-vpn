@@ -6,7 +6,17 @@ A VPN implementation based on the MASQUE (CONNECT-IP) protocol using QUIC transp
 
 **⚠️ This project is in early development and is not ready for production use. It is intended for educational purposes and to demonstrate the MASQUE protocol.**
 
-**This project includes a submodule `connect-ip-go`. Please clone the repository with `--recurse-submodules`: `git clone --recurse-submodules https://github.com/iselt/masque-vpn.git`**
+**This project includes a submodule `connect-ip-go`. Please clone the repository with `--recurse-submodules`:**
+
+```bash
+git clone --recurse-submodules https://github.com/twogc/masque-vpn.git
+```
+
+Or if you're using the original repository:
+
+```bash
+git clone --recurse-submodules https://github.com/iselt/masque-vpn.git
+```
 
 ## Features
 
@@ -167,11 +177,107 @@ This project is for educational purposes. Contributions are welcome for:
 - [quic-go Library](https://github.com/quic-go/quic-go)
 - [connect-ip-go Library](https://github.com/quic-go/connect-ip-go)
 
+### Standards and RFCs
+
+- **MASQUE CONNECT-IP**: [RFC 9484](https://datatracker.ietf.org/doc/html/rfc9484) - Proxying IP in HTTP
+- **MASQUE CONNECT-UDP**: [RFC 9298](https://datatracker.ietf.org/doc/html/rfc9298) - Proxying UDP in HTTP
+- **QUIC Transport**: [RFC 9000](https://datatracker.ietf.org/doc/html/rfc9000) - QUIC: A UDP-Based Multiplexed and Secure Transport
+- **HTTP Datagrams**: [RFC 9297](https://datatracker.ietf.org/doc/html/rfc9297) - HTTP Datagrams and the Capsule Protocol
 
 This project is built upon the following open-source libraries:
 
 * [quic-go](https://github.com/quic-go/quic-go) - A QUIC implementation in Go
 * [connect-ip-go](https://github.com/quic-go/connect-ip-go) - A Go implementation of the MASQUE CONNECT-IP protocol
+
+## For MPEI Students and Researchers
+
+This project is part of the educational materials for the National Research University "MPEI" (Moscow Power Engineering Institute) course on modern network protocols for autonomous systems (UAS - Unmanned Aerial Systems).
+
+### Connection to MPEI Curriculum
+
+This implementation demonstrates **MASQUE CONNECT-IP (RFC 9484)** - a modern protocol for tunneling IP packets over HTTP/3 (QUIC), which is covered in the National Research University "MPEI" course "Personnel for Autonomous Systems".
+
+**Course Resources:**
+- OpenEdu Course: [openedu.mpei.ru/course/BAS_2](https://openedu.mpei.ru/course/BAS_2)
+- Federal Project: "Personnel for Autonomous Systems"
+
+### Why MASQUE for Autonomous Systems?
+
+MASQUE CONNECT-IP solves critical connectivity challenges for autonomous systems:
+
+1. **Corporate Network Bypass**: Many corporate networks block UDP traffic. MASQUE tunnels IP packets over QUIC (UDP:443), making it look like HTTPS traffic and bypassing firewalls.
+
+2. **Mobile Network Optimization**: QUIC's built-in features (0-RTT, connection migration, multiplexing) provide better performance than traditional VPN protocols in mobile scenarios.
+
+3. **Standards-Based**: Unlike proprietary VPN solutions, MASQUE is an IETF standard (RFC 9484), ensuring interoperability and future compatibility.
+
+### Research Topics for Students
+
+This project can serve as a foundation for diploma work, research projects, or laboratory assignments:
+
+#### 1. Performance Analysis
+- Compare MASQUE VPN performance vs traditional VPN protocols (OpenVPN, WireGuard)
+- Measure latency, throughput, and jitter under different network conditions
+- Analyze QUIC connection migration impact on VPN stability
+
+#### 2. Security Evaluation
+- Evaluate mutual TLS authentication implementation
+- Analyze certificate management and PKI security
+- Study anti-replay mechanisms for 0-RTT connections
+
+#### 3. Network Optimization
+- Implement and test BBRv3 congestion control for MASQUE tunnels
+- Optimize IP pool management and routing algorithms
+- Study the impact of packet loss on VPN performance
+
+#### 4. Integration with Autonomous Systems
+- Integrate MASQUE VPN with ground control stations
+- Implement handover prediction for mobile scenarios
+- Design failover mechanisms for critical connections
+
+#### 5. Protocol Extensions
+- Implement additional MASQUE features (CONNECT-UDP for specific use cases)
+- Add support for IPv6 tunneling
+- Integrate with AI-based routing systems
+
+### Laboratory Assignments
+
+**Basic Level:**
+1. Set up MASQUE VPN server and client
+2. Configure certificate-based authentication
+3. Test connectivity through corporate firewalls
+4. Monitor connection metrics (latency, throughput)
+
+**Advanced Level:**
+1. Implement custom routing policies
+2. Add performance monitoring and metrics collection
+3. Integrate with network emulation tools (tc, netem)
+4. Compare performance with traditional VPN solutions
+
+**Research Level:**
+1. Implement and test protocol optimizations
+2. Design and evaluate new features
+3. Publish results in academic conferences
+4. Contribute improvements back to the project
+
+### Getting Started for Research
+
+1. **Fork this repository**: Create your own fork for experiments
+2. **Read the code**: Understand the architecture in `vpn_server/` and `vpn_client/`
+3. **Set up test environment**: Use network emulation to simulate various conditions
+4. **Collect metrics**: Implement logging and monitoring for your research
+5. **Document findings**: Write reports comparing different configurations
+
+### Contact and Collaboration
+
+For questions about using this project in National Research University "MPEI" research:
+- Check the original repository: [iselt/masque-vpn](https://github.com/iselt/masque-vpn)
+- CloudBridge Research: [2gc.ru](https://2gc.ru)
+
+### Related Projects
+
+- [CloudBridge QUIC Test Suite](https://github.com/twogc/cloudbridge-relay-installer) - QUIC protocol testing and benchmarking
+- [CloudBridge Research](https://cloudbridge-research.ru) - Research documentation and publications
 
 ## 中文文档
 
