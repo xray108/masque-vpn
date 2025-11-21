@@ -32,3 +32,7 @@ mtu = 1413
 listen_addr = "0.0.0.0:8080"
 static_dir = "../admin_webui/dist"
 database_path = "masque_admin.db"
+
+[metrics]
+enabled = true
+listen_addr = "0.0.0.0:9090"

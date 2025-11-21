@@ -16,7 +16,8 @@
     "logoutSuccess": "已成功退出登录！",
     "language": "语言",
     "english": "English",
-    "chinese": "中文"
+    "chinese": "中文",
+    "russian": "Русский"
   },
   "login": {
     "title": "登录",
@@ -190,9 +191,13 @@
   "about": {
     "title": "关于 MASQUE VPN",
     "version": "版本 {version}",
-    "description": "这是 MASQUE VPN 服务器的 Web 管理界面。",
+    "description": "MASQUE VPN 服务器的 Web 管理界面。CloudBridge Research Center 增强了 MASQUE VPN，用于面向 MPEI 学生和网络技术研究人员的教育计划。",
+    "organization": "组织：",
+    "organizationName": "CloudBridge Research Center / 2GC Network Protocol Suite",
+    "organizationDescription": "独立研究中心，专注于分布式系统和网络技术的先进研究、教育计划和开源解决方案开发。",
     "author": "开发者：",
     "projectLink": "GitHub 项目仓库",
+    "websiteLink": "CloudBridge Research 官方网站",
     "techStack": "技术栈："
   }
 }

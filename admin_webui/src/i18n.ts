@@ -1,32 +1,36 @@
 import { createI18n } from 'vue-i18n';
-import enLocale from './locales/en.json'; // 恢复导入
-import zhLocale from './locales/zh.json'; // 恢复导入
-// 从 element-plus/es/locale/lang/ 导入区域设置文件
+import enLocale from './locales/en.json';
+import zhLocale from './locales/zh.json';
+import ruLocale from './locales/ru.json';
+// Import Element Plus locale files
 import elementEnLocale from 'element-plus/es/locale/lang/en';
 import elementZhLocale from 'element-plus/es/locale/lang/zh-cn';
+import elementRuLocale from 'element-plus/es/locale/lang/ru';
 
-// 定义 Element Plus 区域设置的映射
+// Define Element Plus locale mapping
 export const elementPlusLocales = {
   en: elementEnLocale,
-  zh: elementZhLocale
+  zh: elementZhLocale,
+  ru: elementRuLocale
 };
 
-// 恢复使用从 JSON 文件导入的 messages 对象
+// Messages object from JSON files
 const messages = {
   en: {
     ...enLocale,
-    // el: elementEnLocale // Element Plus 自己的国际化消息可以这样合并，但通常 ElementPlus 组件会自己处理
   },
   zh: {
     ...zhLocale,
-    // el: elementZhLocale
+  },
+  ru: {
+    ...ruLocale,
   }
 };
 
 const i18n = createI18n({
-  locale: localStorage.getItem('locale') || 'zh',
+  locale: localStorage.getItem('locale') || 'ru',
   fallbackLocale: 'en',
-  messages, // 使用从 JSON 文件加载的 messages
+  messages,
   legacy: false,
   runtimeOnly: false, 
   globalInjection: true,

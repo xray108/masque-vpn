@@ -162,6 +162,40 @@ Requirements:
 3. **Firewall**: Ensure server port (default 4433) is accessible
 4. **MTU Issues**: Adjust MTU settings if experiencing connectivity problems
 
+
+### macOS-Specific Issues
+
+#### Technical Details
+
+**Point-to-Point Interfaces**
+
+TUN devices on macOS create a virtual point-to-point tunnel between two endpoints:
+- **Server (local)**: gateway IP (e.g., 10.0.0.1)
+- **Client (destination)**: next IP address (e.g., 10.0.0.2)
+
+The `Next()` method from the `netip` package returns the next IP address:
+- `10.0.0.1.Next()` → `10.0.0.2`
+- `192.168.1.1.Next()` → `192.168.1.2`
+
+**WireGuard TUN Offset**
+
+WireGuard TUN on macOS uses an offset for packet header placement:
+- **4 bytes** - minimum offset required for macOS
+- **10 bytes** - used in `proxy.go` (VirtioNetHdrLen)
+
+The offset indicates where packet data begins in the buffer. The library writes the header before this position:
+
+```
+Buffer: [header (4 bytes)][packet data (n bytes)]
+                         ^
+                         offset=4
+```
+
+**Platform Compatibility**
+
+These fixes are macOS-specific and don't affect other platforms:
+- **Linux**: uses `tun_linux.go`
+- **Windows**: uses `tun_windows.go`
 ## Contributing
 
 This project is for educational purposes. Contributions are welcome for:
@@ -282,3 +316,6 @@ For questions about using this project in National Research University "MPEI" re
 ## 中文文档
 
 请参考 [README_zh.md](README_zh.md) 获取中文使用说明。
+## Документация на других языках
+
+Русская документация: [README_ru.md](README_ru.md)

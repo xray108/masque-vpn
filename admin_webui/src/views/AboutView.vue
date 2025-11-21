@@ -7,16 +7,30 @@
         </div>
       </template>
       <div class="content">
-        <p>{{ t('appName') }} {{ t('about.version', { version: '1.0.0' }) }}</p>
+        <p><strong>{{ t('appName') }} {{ t('about.version', { version: '1.0.0' }) }}</strong></p>
         <p>{{ t('about.description') }}</p>
+        
         <p>
-          {{ t('about.author') }}
+          <strong>{{ t('about.organization') }}</strong><br>
+          {{ t('about.organizationName') }}<br>
+          <span style="color: #666; font-size: 0.9em;">{{ t('about.organizationDescription') }}</span>
         </p>
+        
         <p>
-          <a href="https://github.com/iselt/masque-vpn" target="_blank" rel="noopener noreferrer">
+          <strong>{{ t('about.author') }}</strong><br>
+          CloudBridge Research Center
+        </p>
+        
+        <p>
+          <strong>Links:</strong><br>
+          <a href="https://github.com/twogc/masque-vpn" target="_blank" rel="noopener noreferrer">
             {{ t('about.projectLink') }}
+          </a><br>
+          <a href="https://cloudbridge-research.ru" target="_blank" rel="noopener noreferrer">
+            {{ t('about.websiteLink') }}
           </a>
         </p>
+        
         <p>
           {{ t('about.techStack') }}
           <ul>
@@ -26,6 +40,8 @@
             <li>Pinia</li>
             <li>TypeScript</li>
             <li>vue-i18n</li>
+            <li>Go (backend)</li>
+            <li>QUIC / MASQUE Protocol</li>
           </ul>
         </p>
       </div>

@@ -29,8 +29,8 @@ userStore.checkAuthStatus().then(() => {
   app.use(router)
   app.use(i18n)
 
-  const currentLocale = i18n.global.locale.value // 正确访问 locale
-  app.use(ElementPlus, { locale: elementPlusLocales[currentLocale as 'en' | 'zh'] || elementPlusLocales.en })
+  const currentLocale = i18n.global.locale.value
+  app.use(ElementPlus, { locale: elementPlusLocales[currentLocale as 'en' | 'zh' | 'ru'] || elementPlusLocales.ru })
 
   app.mount('#app')
 

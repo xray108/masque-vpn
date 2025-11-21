@@ -16,7 +16,8 @@
     "logoutSuccess": "Logged out successfully!",
     "language": "Language",
     "english": "English",
-    "chinese": "中文"
+    "chinese": "中文",
+    "russian": "Русский"
   },
   "login": {
     "title": "Login",
@@ -190,9 +191,13 @@
   "about": {
     "title": "About MASQUE VPN",
     "version": "Version {version}",
-    "description": "This is the web management interface for the MASQUE VPN server.",
+    "description": "Web management interface for MASQUE VPN server. CloudBridge Research Center has enhanced MASQUE VPN for use in educational initiatives for MPEI students and network technology researchers.",
+    "organization": "Organization:",
+    "organizationName": "CloudBridge Research Center / 2GC Network Protocol Suite",
+    "organizationDescription": "Independent research center specializing in advanced research in distributed systems and network technologies, educational initiatives, and open-source solutions development.",
     "author": "Developed by:",
     "projectLink": "Project Repository on GitHub",
+    "websiteLink": "CloudBridge Research Official Website",
     "techStack": "Built with:"
   }
 }

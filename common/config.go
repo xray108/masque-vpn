@@ -48,4 +48,13 @@ type ServerConfig struct {
 
 	// 修改：使用嵌套结构体来映射 [api_server] 表
 	APIServer APIServerConfig `toml:"api_server"`
+
+	// Metrics configuration
+	Metrics MetricsConfig `toml:"metrics"`
+}
+
+// MetricsConfig holds metrics server configuration
+type MetricsConfig struct {
+	Enabled  bool   `toml:"enabled"`
+	ListenAddr string `toml:"listen_addr"`
 }

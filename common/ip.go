@@ -232,3 +232,13 @@ func (p *IPPool) Release(ip netip.Addr) {
 		p.available = append(p.available, ip)
 	}
 }
+
+// Stats returns pool statistics
+func (p *IPPool) Stats() (total, allocated, available int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	total = len(p.available) + len(p.allocated)
+	allocated = len(p.allocated)
+	available = len(p.available)
+	return
+}

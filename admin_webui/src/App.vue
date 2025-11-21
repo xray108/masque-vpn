@@ -46,6 +46,8 @@ const handleCommand = (command: string) => {
     handleLanguageChange('en')
   } else if (command === 'lang-zh') {
     handleLanguageChange('zh')
+  } else if (command === 'lang-ru') {
+    handleLanguageChange('ru')
   }
 }
 
@@ -54,7 +56,7 @@ onMounted(() => {
   currentLanguage.value = locale.value
 })
 
-const elLocale = computed(() => elementPlusLocales[locale.value as 'en' | 'zh'] || elementPlusLocales.en)
+const elLocale = computed(() => elementPlusLocales[locale.value as 'en' | 'zh' | 'ru'] || elementPlusLocales.en)
 
 watch(locale, (newLocale) => {
   currentLanguage.value = newLocale
@@ -121,6 +123,7 @@ watch(locale, (newLocale) => {
                 <el-dropdown-menu>
                   <el-dropdown-item command="lang-en" :disabled="currentLanguage === 'en'">{{ t('header.english') }}</el-dropdown-item>
                   <el-dropdown-item command="lang-zh" :disabled="currentLanguage === 'zh'">{{ t('header.chinese') }}</el-dropdown-item>
+                  <el-dropdown-item command="lang-ru" :disabled="currentLanguage === 'ru'">{{ t('header.russian') }}</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>

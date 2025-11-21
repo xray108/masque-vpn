@@ -72,9 +72,10 @@ func main() {
 
 	// 启动TUN->VPN分发goroutine（修正位置）
 	go func() {
-		buf := make([]byte, 2048)
+		// Allocate buffer with offset space for macOS TUN device
+		buf := make([]byte, 2048+common.TunPacketOffset)
 		for {
-			n, err := tunDev.ReadPacket(buf, 0)
+			n, err := tunDev.ReadPacket(buf, common.TunPacketOffset)
 			if err != nil && err != os.ErrClosed {
 				log.Printf("TUN read error: %v", err)
 				continue
@@ -82,8 +83,9 @@ func main() {
 			if n == 0 {
 				continue
 			}
+			// Extract packet data (skip offset bytes)
 			packet := make([]byte, n)
-			copy(packet, buf[:n])
+			copy(packet, buf[common.TunPacketOffset:common.TunPacketOffset+n])
 
 			// 提取目标IP
 			dstIP, err := common.GetDestinationIP(packet, n)
@@ -195,6 +197,46 @@ func main() {
 	defer ln.Close()
 	log.Printf("QUIC Listener started on %s", udpConn.LocalAddr())
 
+	// Initialize metrics
+	var metrics *Metrics
+	if serverConfig.Metrics.Enabled {
+		metrics = NewMetrics()
+		log.Printf("Metrics enabled, will be available at %s/metrics", serverConfig.Metrics.ListenAddr)
+		
+		// Initialize IP pool metrics
+		total, _, available := ipPool.Stats()
+		metrics.ipPoolTotal.Set(float64(total))
+		metrics.ipPoolAvailable.Set(float64(available))
+		if total > 0 {
+			usagePercent := float64(total-available) / float64(total) * 100
+			metrics.ipPoolUsage.Set(usagePercent)
+		}
+		
+		// Start metrics server
+		go func() {
+			if err := StartMetricsServer(serverConfig.Metrics.ListenAddr); err != nil {
+				log.Printf("Failed to start metrics server: %v", err)
+			}
+		}()
+		
+		// Update IP pool metrics periodically
+		go func() {
+			ticker := time.NewTicker(10 * time.Second)
+			defer ticker.Stop()
+			for range ticker.C {
+				ipPoolMu.Lock()
+				total, allocated, available := ipPool.Stats()
+				ipPoolMu.Unlock()
+				metrics.ipPoolTotal.Set(float64(total))
+				metrics.ipPoolAvailable.Set(float64(available))
+				if total > 0 {
+					usagePercent := float64(allocated) / float64(total) * 100
+					metrics.ipPoolUsage.Set(usagePercent)
+				}
+			}
+		}()
+	}
+
 	// --- CONNECT-IP 代理和 HTTP 处理程序 ---
 	p := connectip.Proxy{}
 	// 使用配置的服务器名称和端口作为模板
@@ -269,7 +311,7 @@ func main() {
 		log.Printf("Allocated IP %s to client %s", assignedPrefix, clientID)
 
 		// 处理客户端连接，传递分配的 IP 和数据库路径
-		go handleClientConnection(conn, clientID, tunDev, assignedPrefix, routesToAdvertise, ipPool, &ipPoolMu, clientIPMap, ipConnMap, serverConfig.APIServer.DatabasePath)
+		go handleClientConnection(conn, clientID, tunDev, assignedPrefix, routesToAdvertise, ipPool, &ipPoolMu, clientIPMap, ipConnMap, serverConfig.APIServer.DatabasePath, metrics)
 	})
 
 	// 新增：API服务goroutine
@@ -322,16 +364,34 @@ func main() {
 // handleClientConnection 处理客户端VPN连接
 func handleClientConnection(conn *connectip.Conn, clientID string,
 	tunDev *common.TUNDevice, assignedPrefix netip.Prefix, routes []connectip.IPRoute,
-	ipPool *common.IPPool, ipPoolMu *sync.Mutex, clientIPMap map[string]netip.Addr, ipConnMap map[netip.Addr]*connectip.Conn, dbPath string) { // 新增 dbPath 参数
+	ipPool *common.IPPool, ipPoolMu *sync.Mutex, clientIPMap map[string]netip.Addr, ipConnMap map[netip.Addr]*connectip.Conn, dbPath string, metrics *Metrics) {
 	defer conn.Close()
 
 	log.Printf("Handling connection for client %s", clientID)
+	
+	// Initialize client metrics
+	var clientMetrics *ClientMetrics
+	if metrics != nil {
+		clientMetrics = NewClientMetrics(clientID)
+		metrics.activeConnections.Inc()
+		metrics.connectionsTotal.WithLabelValues("established").Inc()
+		defer func() {
+			metrics.activeConnections.Dec()
+			if clientMetrics != nil {
+				clientMetrics.Close()
+			}
+		}()
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// --- 为客户端分配唯一 IP 前缀 ---
 	if err := conn.AssignAddresses(ctx, []netip.Prefix{assignedPrefix}); err != nil {
 		log.Printf("Error assigning address %s to client %s: %v", assignedPrefix, clientID, err)
+		if metrics != nil {
+			metrics.connectionsTotal.WithLabelValues("failed").Inc()
+			metrics.errorsTotal.WithLabelValues("connection").Inc()
+		}
 		// 释放 IP
 		ipPoolMu.Lock()
 		ipPool.Release(assignedPrefix.Addr())
@@ -345,6 +405,10 @@ func handleClientConnection(conn *connectip.Conn, clientID string,
 	// --- 向客户端广播路由 ---
 	if err := conn.AdvertiseRoute(ctx, routes); err != nil {
 		log.Printf("Error advertising routes to client %s: %v", clientID, err)
+		if metrics != nil {
+			metrics.connectionsTotal.WithLabelValues("failed").Inc()
+			metrics.errorsTotal.WithLabelValues("connection").Inc()
+		}
 		ipPoolMu.Lock()
 		ipPool.Release(assignedPrefix.Addr())
 		delete(clientIPMap, clientID)
