@@ -23,12 +23,23 @@ import (
 	"github.com/BurntSushi/toml"
 	connectip "github.com/iselt/connect-ip-go"
 	common "github.com/iselt/masque-vpn/common" // Import local module
+	common_fec "github.com/iselt/masque-vpn/common/fec"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	"github.com/yosida95/uritemplate/v3"
 )
 
 var serverConfig common.ServerConfig
+
+// ClientSession holds per-client state including FEC
+type ClientSession struct {
+	conn         *connectip.Conn
+	encoder      *common_fec.XOREncoder
+	packetBuffer [][]byte
+	seqNum       uint32
+	fecEnabled   bool
+	mu           sync.Mutex
+}
 
 func main() {
 	if os.Getenv("PERF_PROFILE") != "" {
@@ -57,12 +68,6 @@ func main() {
 		log.Fatalf("Failed to create IP allocator: %v", err)
 	}
 
-	// 新增：创建全局 IP 地址池
-	ipPool := common.NewIPPool(networkInfo.GetPrefix(), networkInfo.GetGateway().Addr())
-	clientIPMap := make(map[string]netip.Addr)        // clientID -> IP
-	ipConnMap := make(map[netip.Addr]*connectip.Conn) // IP -> conn
-	var ipPoolMu sync.Mutex
-
 	// --- 创建 TUN 设备 ---
 	tunDev, err := common.CreateTunDevice(serverConfig.TunName, networkInfo.GetGateway(), serverConfig.MTU)
 	if err != nil {
@@ -70,7 +75,12 @@ func main() {
 	}
 	defer tunDev.Close()
 
-	// 启动TUN->VPN分发goroutine（修正位置）
+	// 新增：创建全局 IP 地址池
+	ipPool := common.NewIPPool(networkInfo.GetPrefix(), networkInfo.GetGateway().Addr())
+	clientIPMap := make(map[string]netip.Addr)        // clientID -> IP
+	ipConnMap := make(map[netip.Addr]*ClientSession)  // IP -> ClientSession
+	var ipPoolMu sync.Mutex
+
 	go func() {
 		// Allocate buffer with offset space for macOS TUN device
 		buf := make([]byte, 2048+common.TunPacketOffset)
@@ -95,13 +105,28 @@ func main() {
 			}
 
 			ipPoolMu.Lock()
-			conn, ok := ipConnMap[dstIP]
+			session, ok := ipConnMap[dstIP]
 			ipPoolMu.Unlock()
 			if ok {
-				_, err := conn.WritePacket(packet)
-				if err != nil {
-					log.Printf("Failed to forward packet to client %s: %v", dstIP, err)
+				session.mu.Lock()
+				if session.fecEnabled {
+					// Add to buffer
+					session.packetBuffer = append(session.packetBuffer, packet)
+					
+					// If buffer full, encode and send
+					if len(session.packetBuffer) >= session.encoder.Config().BlockSize {
+						if err := common.EncodeAndSendBlock(session.encoder, session.conn, session.packetBuffer, &session.seqNum); err != nil {
+							log.Printf("Failed to send FEC block to client %s: %v", dstIP, err)
+						}
+						session.packetBuffer = session.packetBuffer[:0]
+					}
+				} else {
+					_, err := session.conn.WritePacket(packet)
+					if err != nil {
+						log.Printf("Failed to forward packet to client %s: %v", dstIP, err)
+					}
 				}
+				session.mu.Unlock()
 			} else {
 				// log.Printf("No client found for destination IP %s", dstIP)
 			}
@@ -296,6 +321,27 @@ func main() {
 
 		log.Printf("CONNECT-IP session established for %s", clientID)
 
+		// Initialize FEC encoder if enabled
+		var encoder *common_fec.XOREncoder
+		fecEnabled := serverConfig.FEC.Enabled
+		if fecEnabled {
+			enc, err := common_fec.NewXOREncoder(serverConfig.FEC)
+			if err != nil {
+				log.Printf("Failed to create FEC encoder for client %s: %v", clientID, err)
+				fecEnabled = false
+			} else {
+				encoder = enc
+			}
+		}
+
+		// Create ClientSession
+		session := &ClientSession{
+			conn:       conn,
+			encoder:    encoder,
+			fecEnabled: fecEnabled,
+			seqNum:     0,
+		}
+
 		// 新增：为客户端分配唯一 IP
 		ipPoolMu.Lock()
 		assignedPrefix, allocErr := ipPool.Allocate(clientID)
@@ -306,12 +352,12 @@ func main() {
 			return
 		}
 		clientIPMap[clientID] = assignedPrefix.Addr()
-		ipConnMap[assignedPrefix.Addr()] = conn
+		ipConnMap[assignedPrefix.Addr()] = session
 		ipPoolMu.Unlock()
 		log.Printf("Allocated IP %s to client %s", assignedPrefix, clientID)
 
 		// 处理客户端连接，传递分配的 IP 和数据库路径
-		go handleClientConnection(conn, clientID, tunDev, assignedPrefix, routesToAdvertise, ipPool, &ipPoolMu, clientIPMap, ipConnMap, serverConfig.APIServer.DatabasePath, metrics)
+		go handleClientConnection(session, clientID, tunDev, assignedPrefix, routesToAdvertise, ipPool, &ipPoolMu, clientIPMap, ipConnMap, serverConfig.APIServer.DatabasePath, metrics)
 	})
 
 	// 新增：API服务goroutine
@@ -362,10 +408,10 @@ func main() {
 }
 
 // handleClientConnection 处理客户端VPN连接
-func handleClientConnection(conn *connectip.Conn, clientID string,
+func handleClientConnection(session *ClientSession, clientID string,
 	tunDev *common.TUNDevice, assignedPrefix netip.Prefix, routes []connectip.IPRoute,
-	ipPool *common.IPPool, ipPoolMu *sync.Mutex, clientIPMap map[string]netip.Addr, ipConnMap map[netip.Addr]*connectip.Conn, dbPath string, metrics *Metrics) {
-	defer conn.Close()
+	ipPool *common.IPPool, ipPoolMu *sync.Mutex, clientIPMap map[string]netip.Addr, ipConnMap map[netip.Addr]*ClientSession, dbPath string, metrics *Metrics) {
+	defer session.conn.Close()
 
 	log.Printf("Handling connection for client %s", clientID)
 	
@@ -386,7 +432,7 @@ func handleClientConnection(conn *connectip.Conn, clientID string,
 	defer cancel()
 
 	// --- 为客户端分配唯一 IP 前缀 ---
-	if err := conn.AssignAddresses(ctx, []netip.Prefix{assignedPrefix}); err != nil {
+	if err := session.conn.AssignAddresses(ctx, []netip.Prefix{assignedPrefix}); err != nil {
 		log.Printf("Error assigning address %s to client %s: %v", assignedPrefix, clientID, err)
 		if metrics != nil {
 			metrics.connectionsTotal.WithLabelValues("failed").Inc()
@@ -403,7 +449,7 @@ func handleClientConnection(conn *connectip.Conn, clientID string,
 	log.Printf("Assigned IP %s to client %s", assignedPrefix, clientID)
 
 	// --- 向客户端广播路由 ---
-	if err := conn.AdvertiseRoute(ctx, routes); err != nil {
+	if err := session.conn.AdvertiseRoute(ctx, routes); err != nil {
 		log.Printf("Error advertising routes to client %s: %v", clientID, err)
 		if metrics != nil {
 			metrics.connectionsTotal.WithLabelValues("failed").Inc()
@@ -421,7 +467,7 @@ func handleClientConnection(conn *connectip.Conn, clientID string,
 	// --- 用户组与访问控制策略 ---
 	// 修改：调用 api_server.go 中的 getGroupsAndPoliciesForClient，并传递 dbPath
 	groupIDs, policies := getGroupsAndPoliciesForClient(dbPath, clientID)
-	conn.SetAccessControl(clientID, groupIDs, policies)
+	session.conn.SetAccessControl(clientID, groupIDs, policies)
 
 	// --- 只保留VPN->TUN方向 ---
 	errChan := make(chan error, 1)
@@ -430,12 +476,13 @@ func handleClientConnection(conn *connectip.Conn, clientID string,
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		common.ProxyFromVPNToTun(tunDev, conn, errChan)
+		// Pass &serverConfig.FEC to enable decoding
+		common.ProxyFromVPNToTun(tunDev, session.conn, errChan, &serverConfig.FEC)
 	}()
 
 	err := <-errChan
 	log.Printf("Proxying stopped for client %s: %v", clientID, err)
-	conn.Close()
+	session.conn.Close()
 
 	wg.Wait()
 	log.Printf("Finished handling client %s", clientID)

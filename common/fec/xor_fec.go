@@ -99,6 +99,11 @@ func (e *XOREncoder) xorPackets(packets [][]byte) []byte {
 	return redundancy
 }
 
+// Config returns the encoder configuration
+func (e *XOREncoder) Config() Config {
+	return e.config
+}
+
 // XORDecoder implements XOR-based FEC decoding
 type XORDecoder struct {
 	config Config
@@ -110,6 +115,11 @@ func NewXORDecoder(config Config) (*XORDecoder, error) {
 		return nil, fmt.Errorf("invalid FEC config: %w", err)
 	}
 	return &XORDecoder{config: config}, nil
+}
+
+// Config returns the decoder configuration
+func (d *XORDecoder) Config() Config {
+	return d.config
 }
 
 // Decode attempts to recover lost packets using XOR-based FEC

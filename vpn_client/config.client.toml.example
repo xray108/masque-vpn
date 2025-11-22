@@ -1,0 +1,43 @@
+# VPN 客户端配置
+
+# VPN 服务器地址 (IP:Port)
+server_addr = "127.0.0.1:4433"
+
+# 服务器名称 (用于证书验证和 URI 模板)
+server_name = "vpn.example.local"
+
+# CA 证书文件路径 (用于验证服务器证书)
+ca_file = "cert/ca.crt"
+# 或者直接提供 PEM 内容
+# ca_pem = "-----BEGIN CERTIFICATE-----\n..."
+
+# 客户端证书文件路径 (mTLS)
+cert_file = "cert/client.crt"
+# 或者直接提供 PEM 内容
+# cert_pem = "-----BEGIN CERTIFICATE-----\n..."
+
+# 客户端私钥文件路径 (mTLS)
+key_file = "cert/client.key"
+# 或者直接提供 PEM 内容
+# key_pem = "-----BEGIN PRIVATE KEY-----\n..."
+
+# 是否跳过服务器证书验证 (不推荐用于生产环境)
+insecure_skip_verify = false
+
+# 可选：TUN 设备名称
+# tun_name = "utun5"
+
+# 可选：TLS 密钥日志文件 (用于 Wireshark 调试)
+# key_log_file = "ssl-key.log"
+
+# 日志级别 (debug, info, warn, error)
+log_level = "info"
+
+# MTU 设置
+mtu = 1413
+
+# Forward Error Correction (FEC) configuration
+[fec]
+enabled = false
+redundancy_percent = 10  # 10% redundancy
+block_size = 20          # Number of packets per FEC block

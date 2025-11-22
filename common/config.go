@@ -1,5 +1,9 @@
 package common
 
+import (
+	common_fec "github.com/iselt/masque-vpn/common/fec"
+)
+
 // ClientConfig 结构体，用于存储从 TOML 文件加载的客户端配置信息
 // 可供 vpn_client/main.go 使用
 //
@@ -15,8 +19,9 @@ type ClientConfig struct {
 	InsecureSkipVerify bool   `toml:"insecure_skip_verify"`
 	TunName            string `toml:"tun_name"`
 	KeyLogFile         string `toml:"key_log_file"`
-	LogLevel           string `toml:"log_level"`
-	MTU                int    `toml:"mtu"`
+	LogLevel           string    `toml:"log_level"`
+	MTU                int       `toml:"mtu"`
+	FEC                common_fec.Config `toml:"fec"`
 }
 
 // APIServerConfig 结构体，用于存储 API 服务器的配置信息
@@ -51,10 +56,13 @@ type ServerConfig struct {
 
 	// Metrics configuration
 	Metrics MetricsConfig `toml:"metrics"`
+
+	// FEC configuration
+	FEC common_fec.Config `toml:"fec"`
 }
 
 // MetricsConfig holds metrics server configuration
 type MetricsConfig struct {
-	Enabled  bool   `toml:"enabled"`
+	Enabled    bool   `toml:"enabled"`
 	ListenAddr string `toml:"listen_addr"`
 }

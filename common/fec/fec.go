@@ -19,13 +19,16 @@ type Decoder interface {
 
 // Config holds FEC configuration parameters
 type Config struct {
+	// Enabled determines if FEC is enabled
+	Enabled bool `toml:"enabled"`
+
 	// RedundancyPercent is the percentage of redundancy packets to add
 	// For example, 10 means 10% redundancy (1 redundancy packet per 10 data packets)
-	RedundancyPercent int
+	RedundancyPercent int `toml:"redundancy_percent"`
 
 	// BlockSize is the number of data packets per FEC block
 	// Redundancy packets are calculated per block
-	BlockSize int
+	BlockSize int `toml:"block_size"`
 }
 
 // Validate checks if the configuration is valid

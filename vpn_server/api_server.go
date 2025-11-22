@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -23,7 +22,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	connectip "github.com/iselt/connect-ip-go"
 	common "github.com/iselt/masque-vpn/common"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -50,7 +48,7 @@ type ServerConfigDB struct {
 // 全局变量
 var (
 	globalClientIPMap = make(map[string]netip.Addr)
-	globalIPConnMap   = make(map[netip.Addr]*connectip.Conn)
+	globalIPConnMap   = make(map[netip.Addr]*ClientSession)
 	// 会话存储
 	sessionStore = make(map[string]string)
 	sessionMu    sync.Mutex
@@ -463,7 +461,7 @@ func ginHandleDownloadClient(dbPath string) gin.HandlerFunc {
 	}
 }
 
-func ginHandleDeleteClient(dbPath string, ipPoolMu *sync.Mutex, clientIPMap map[string]netip.Addr, ipConnMap map[netip.Addr]*connectip.Conn) gin.HandlerFunc {
+func ginHandleDeleteClient(dbPath string, ipPoolMu *sync.Mutex, clientIPMap map[string]netip.Addr, ipConnMap map[netip.Addr]*ClientSession) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Query("id")
 		if id == "" {
@@ -473,9 +471,9 @@ func ginHandleDeleteClient(dbPath string, ipPoolMu *sync.Mutex, clientIPMap map[
 		if ipPoolMu != nil && clientIPMap != nil && ipConnMap != nil {
 			ipPoolMu.Lock()
 			if ip, ok := clientIPMap[id]; ok {
-				if conn, ok2 := ipConnMap[ip]; ok2 {
+				if session, ok2 := ipConnMap[ip]; ok2 {
 					log.Printf("主动断开客户端 %s (IP: %s) 的连接", id, ip)
-					conn.Close()
+					session.conn.Close()
 					delete(ipConnMap, ip)
 				}
 				delete(clientIPMap, id)
@@ -495,6 +493,123 @@ func ginHandleDeleteClient(dbPath string, ipPoolMu *sync.Mutex, clientIPMap map[
 		}
 		c.String(200, "ok")
 	}
+}
+
+// 主启动函数
+func StartAPIServer(ipPoolMu *sync.Mutex, clientIPMap map[string]netip.Addr, ipConnMap map[netip.Addr]*ClientSession, serverCfg common.ServerConfig) {
+	log.Println("API Server is starting or restarting. Session store is being initialized.")
+	
+	// Update global variables for use in handlers
+	globalClientIPMap = clientIPMap
+	globalIPConnMap = ipConnMap
+
+	dbPath := serverCfg.APIServer.DatabasePath
+	initDB(dbPath)
+
+	// Check for existing config in DB or initialize
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		log.Fatalf("Failed to open DB: %v", err)
+	}
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM server_config").Scan(&count)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || count == 0 {
+			log.Println("No server config found in DB. Initializing from server.toml settings...")
+			initialDbConfig := ServerConfigDB{
+				ServerAddr: serverCfg.ListenAddr, // VPN 服务器的监听地址，供客户端连接
+				ServerName: serverCfg.ServerName,
+				MTU:        serverCfg.MTU,
+			}
+			if initialDbConfig.MTU == 0 { // 如果 server.toml 中 MTU 未设置或为0，则使用默认值
+				initialDbConfig.MTU = 1413
+				log.Printf("MTU not set or is 0 in server.toml, defaulting to %d for DB initialization", initialDbConfig.MTU)
+			}
+
+			if errSave := saveServerConfigToDB(dbPath, initialDbConfig); errSave != nil {
+				log.Printf("Failed to save initial server config to DB: %v", errSave)
+			} else {
+				log.Printf("Successfully saved initial server config (ServerAddr: %s, ServerName: %s, MTU: %d) to DB.", initialDbConfig.ServerAddr, initialDbConfig.ServerName, initialDbConfig.MTU)
+			}
+		} else {
+			log.Printf("Error fetching server config from DB during initialization check: %v", err)
+		}
+	} else if count > 0 {
+		log.Println("Existing server config found in DB. Skipping initialization from server.toml.")
+	}
+	db.Close()
+
+	// 初始化 Gin
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.Default()
+
+	// API 路由分组
+	api := r.Group("/api")
+	{
+		api.POST("/login", ginHandleLogin(dbPath))
+		// 新增登出接口
+		api.POST("/logout", func(c *gin.Context) {
+			sid, err := c.Cookie("masque_admin_sid")
+			if err == nil && sid != "" {
+				sessionMu.Lock()
+				delete(sessionStore, sid)
+				sessionMu.Unlock()
+			}
+			// 清除 cookie
+			c.SetCookie("masque_admin_sid", "", -1, "/", "", false, true)
+			c.JSON(http.StatusOK, gin.H{"success": true, "message": "Logged out successfully"})
+		})
+
+		// 需要认证的接口
+		auth := api.Group("").Use(ginRequireAuth())
+		{
+			// 新增会话检查接口
+			auth.GET("/auth/check", func(c *gin.Context) {
+				sid, _ := c.Cookie("masque_admin_sid") // Cookie由ginRequireAuth保证存在
+				sessionMu.Lock()
+				username, ok := sessionStore[sid]
+				sessionMu.Unlock()
+				if ok {
+					c.JSON(http.StatusOK, gin.H{"authenticated": true, "username": username})
+				} else {
+					c.JSON(http.StatusUnauthorized, gin.H{"authenticated": false})
+				}
+			})
+
+			auth.GET("/server_config", ginHandleGetServerConfig(dbPath))
+			auth.POST("/server_config", ginHandleSetServerConfig(dbPath))
+
+			auth.GET("/clients", ginHandleListClients(dbPath, clientIPMap))
+			auth.POST("/clients/gen_v2", ginHandleGenClientV2(dbPath, serverCfg))
+			auth.GET("/clients/download", ginHandleDownloadClient(dbPath))
+			auth.DELETE("/clients", ginHandleDeleteClient(dbPath, ipPoolMu, clientIPMap, ipConnMap))
+			// 新增：踢出客户端（同删除，但不删DB）- 暂时复用删除逻辑，或者单独实现
+			auth.POST("/clients/kick", ginHandleDeleteClient(dbPath, ipPoolMu, clientIPMap, ipConnMap)) // 复用删除逻辑，或者需要单独的Kick逻辑
+
+			auth.GET("/groups", ginHandleListGroups(dbPath))
+			auth.POST("/groups", ginHandleAddGroup(dbPath, serverCfg))
+			auth.DELETE("/groups", ginHandleDeleteGroup(dbPath))
+			auth.PUT("/groups", ginHandleUpdateGroup(dbPath))
+
+			auth.GET("/group_members", ginHandleListGroupMembers(dbPath))
+			auth.POST("/group_members", ginHandleAddGroupMember(dbPath))
+			auth.DELETE("/group_members", ginHandleRemoveGroupMember(dbPath))
+
+			auth.GET("/policies", ginHandleListPolicies(dbPath))
+			auth.POST("/policies", ginHandleAddPolicy(dbPath))
+			auth.DELETE("/policies", ginHandleDeletePolicy(dbPath))
+			auth.PUT("/policies", ginHandleUpdatePolicy(dbPath))
+		}
+	}
+
+	// 读取监听地址
+	listenAddr := serverCfg.APIServer.ListenAddr
+	if listenAddr == "" {
+		listenAddr = ":8080" // 默认
+		log.Printf("APIServerListenAddr 未配置，使用默认值: %s", listenAddr)
+	}
+	log.Printf("API server (Gin) listening on %s ...", listenAddr)
+	r.Run(listenAddr)
 }
 
 // 服务器配置相关
@@ -880,197 +995,36 @@ func ginHandleUpdatePolicy(dbPath string) gin.HandlerFunc {
 	}
 }
 
-// 访问控制/辅助函数
-func refreshAccessControlForGroup(dbPath string, groupID string, clientIPMap map[string]netip.Addr, ipConnMap map[netip.Addr]*connectip.Conn) {
+// refreshAccessControlForGroup 刷新指定组内所有在线客户端的访问控制策略
+func refreshAccessControlForGroup(dbPath string, groupID string, clientIPMap map[string]netip.Addr, ipConnMap map[netip.Addr]*ClientSession) {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		log.Printf("[ACL] 刷新策略时打开数据库失败: %v", err)
 		return
 	}
 	defer db.Close()
-	// 1. 查找所有属于 groupID 的 client_id
+
+	// 查找该组的所有成员
 	rows, err := db.Query("SELECT client_id FROM group_members WHERE group_id = ?", groupID)
 	if err != nil {
-		log.Printf("[ACL] 查询group成员失败: %v", err)
+		log.Printf("[ACL] 查询组成员失败: %v", err)
 		return
 	}
 	defer rows.Close()
-	var clientIDs []string
+
 	for rows.Next() {
-		var cid string
-		if err := rows.Scan(&cid); err == nil {
-			clientIDs = append(clientIDs, cid)
-		}
-	}
-	// 2. 遍历 clientIPMap，找到在线的 client_id
-	for _, clientID := range clientIDs {
-		if ip, ok := clientIPMap[clientID]; ok {
-			if conn, ok2 := ipConnMap[ip]; ok2 {
-				// 3. 重新查 groupIDs 和 policies
-				groupIDs, policies := getGroupsAndPoliciesForClient(dbPath, clientID)
-				conn.SetAccessControl(clientID, groupIDs, policies)
-				log.Printf("[ACL] 已刷新客户端 %s 的访问控制策略", clientID)
-			}
-		}
-	}
-}
-
-// 主启动函数
-func StartAPIServer(ipPoolMu *sync.Mutex, clientIPMap map[string]netip.Addr, ipConnMap map[netip.Addr]*connectip.Conn, serverCfg common.ServerConfig) {
-	log.Println("API Server is starting or restarting. Session store is being initialized.")
-	globalClientIPMap = clientIPMap
-	globalIPConnMap = ipConnMap
-
-	// 使用配置的数据库路径
-	dbPath := serverCfg.APIServer.DatabasePath
-	if dbPath == "" {
-		dbPath = "masque_admin.db" // 默认值
-		log.Printf("APIServerDatabasePath 未配置，使用默认值: %s", dbPath)
-	}
-
-	initDB(dbPath)
-
-	// 初始化服务器配置（如果数据库中不存在）
-	_, err := getServerConfigFromDB(dbPath)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			log.Println("No server config found in DB. Initializing from server.toml settings...")
-			initialDbConfig := ServerConfigDB{
-				ServerAddr: serverCfg.ListenAddr, // VPN 服务器的监听地址，供客户端连接
-				ServerName: serverCfg.ServerName,
-				MTU:        serverCfg.MTU,
-			}
-			if initialDbConfig.MTU == 0 { // 如果 server.toml 中 MTU 未设置或为0，则使用默认值
-				initialDbConfig.MTU = 1413
-				log.Printf("MTU not set or is 0 in server.toml, defaulting to %d for DB initialization", initialDbConfig.MTU)
-			}
-
-			if errSave := saveServerConfigToDB(dbPath, initialDbConfig); errSave != nil {
-				log.Printf("Failed to save initial server config to DB: %v", errSave)
-			} else {
-				log.Printf("Successfully saved initial server config (ServerAddr: %s, ServerName: %s, MTU: %d) to DB.", initialDbConfig.ServerAddr, initialDbConfig.ServerName, initialDbConfig.MTU)
-			}
-		} else {
-			log.Printf("Error fetching server config from DB during initialization check: %v", err)
-		}
-	} else {
-		log.Println("Existing server config found in DB. Skipping initialization from server.toml.")
-	}
-
-	// 初始化 Gin
-	gin.SetMode(gin.ReleaseMode)
-	r := gin.Default()
-
-	// API 路由分组
-	api := r.Group("/api")
-	{
-		api.POST("/login", ginHandleLogin(dbPath))
-		// 新增登出接口
-		api.POST("/logout", func(c *gin.Context) {
-			sid, err := c.Cookie("masque_admin_sid")
-			if err == nil && sid != "" {
-				sessionMu.Lock()
-				delete(sessionStore, sid)
-				sessionMu.Unlock()
-			}
-			// 清除 cookie
-			c.SetCookie("masque_admin_sid", "", -1, "/", "", false, true)
-			c.JSON(http.StatusOK, gin.H{"success": true, "message": "Logged out successfully"})
-		})
-
-		// 需要认证的接口
-		auth := api.Group("").Use(ginRequireAuth())
-		{
-			// 新增会话检查接口
-			auth.GET("/auth/check", func(c *gin.Context) {
-				sid, _ := c.Cookie("masque_admin_sid") // Cookie由ginRequireAuth保证存在
-				sessionMu.Lock()
-				username, ok := sessionStore[sid]
-				sessionMu.Unlock()
-
-				if ok {
-					c.JSON(http.StatusOK, gin.H{"loggedIn": true, "username": username})
-				} else {
-					// 理论上 ginRequireAuth 会处理未授权，这里作为额外保障
-					c.JSON(http.StatusUnauthorized, gin.H{"loggedIn": false})
-				}
-			})
-			auth.GET("/clients", ginHandleListClients(dbPath, clientIPMap))
-			auth.POST("/gen_client", ginHandleGenClientV2(dbPath, serverCfg)) // 传递 dbPath
-			auth.GET("/download_client", ginHandleDownloadClient(dbPath))
-			auth.POST("/delete_client", ginHandleDeleteClient(dbPath, ipPoolMu, clientIPMap, ipConnMap))
-
-			auth.GET("/server_config", ginHandleGetServerConfig(dbPath))
-			auth.POST("/server_config", ginHandleSetServerConfig(dbPath))
-
-			auth.GET("/groups", ginHandleListGroups(dbPath))
-			auth.POST("/groups", ginHandleAddGroup(dbPath, serverCfg)) // Pass serverCfg
-			auth.POST("/groups/delete", ginHandleDeleteGroup(dbPath))
-			auth.POST("/groups/update", ginHandleUpdateGroup(dbPath))
-
-			auth.GET("/groups/members", ginHandleListGroupMembers(dbPath))
-			auth.POST("/groups/members", ginHandleAddGroupMember(dbPath))
-			auth.POST("/groups/members/remove", ginHandleRemoveGroupMember(dbPath))
-
-			auth.GET("/policies", ginHandleListPolicies(dbPath))
-			auth.POST("/policies", ginHandleAddPolicy(dbPath))
-			auth.POST("/policies/delete", ginHandleDeletePolicy(dbPath))
-			auth.POST("/policies/update", ginHandleUpdatePolicy(dbPath))
-		}
-	}
-
-	// 静态文件服务
-	staticDir := serverCfg.APIServer.StaticDir
-	if staticDir == "" {
-		staticDir = "./web" // 默认值
-		log.Printf("APIServerStaticDir 未配置，使用默认值: %s", staticDir)
-	}
-
-	// Serve static assets from the 'assets' subdirectory (e.g., /assets/app.js)
-	r.StaticFS("/assets", http.Dir(filepath.Join(staticDir, "assets")))
-
-	// Serve index.html for the root path
-	r.GET("/", func(c *gin.Context) {
-		c.File(filepath.Join(staticDir, "index.html"))
-	})
-
-	// Handle other GET requests:
-	// 1. Try to serve a static file from the root of staticDir if it exists (e.g., /favicon.ico)
-	// 2. If not found, serve index.html (for SPA client-side routing)
-	r.NoRoute(func(c *gin.Context) {
-		if strings.HasPrefix(c.Request.URL.Path, "/api") { // API routes should be matched before NoRoute
-			c.JSON(404, gin.H{"error": "API endpoint not found"})
-			return
-		}
-
-		if c.Request.Method == "GET" {
-			// Do not handle /assets/* here, it's done by StaticFS
-			// Do not handle / here, it's done by r.GET("/")
-			if !strings.HasPrefix(c.Request.URL.Path, "/assets/") && c.Request.URL.Path != "/" {
-				// Attempt to serve a static file from the root of staticDir
-				filePath := filepath.Join(staticDir, c.Request.URL.Path)
-
-				// Check if the file exists and is not a directory
-				if stat, err := os.Stat(filePath); err == nil && !stat.IsDir() {
-					c.File(filePath)
-					return
+		var clientID string
+		if err := rows.Scan(&clientID); err == nil {
+			// 检查客户端是否在线
+			if ip, ok := clientIPMap[clientID]; ok {
+				if session, ok := ipConnMap[ip]; ok {
+					// 重新获取并应用策略
+					// 注意：getGroupsAndPoliciesForClient 在 main.go 中定义，但属于同一个 package main，可以直接调用
+					groupIDs, policies := getGroupsAndPoliciesForClient(dbPath, clientID)
+					session.conn.SetAccessControl(clientID, groupIDs, policies)
+					log.Printf("[ACL] 已刷新客户端 %s 的访问控制策略", clientID)
 				}
 			}
-			// If file not found, or it was a directory, or path was /assets/* or /, serve index.html for SPA.
-			c.File(filepath.Join(staticDir, "index.html"))
-			return
 		}
-
-		// For non-GET requests or other unhandled scenarios
-		c.JSON(404, gin.H{"error": "Resource not found"})
-	})
-
-	// 读取监听地址
-	listenAddr := serverCfg.APIServer.ListenAddr
-	if listenAddr == "" {
-		listenAddr = ":8080" // 默认
-		log.Printf("APIServerListenAddr 未配置，使用默认值: %s", listenAddr)
 	}
-	log.Printf("API server (Gin) listening on %s ...", listenAddr)
-	r.Run(listenAddr)
 }

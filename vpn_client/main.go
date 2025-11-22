@@ -82,11 +82,11 @@ func main() {
 		proxyWg.Add(2)
 		go func() {
 			defer proxyWg.Done()
-			common.ProxyFromTunToVPN(tunDev, ipConn, errChan)
+			common.ProxyFromTunToVPN(tunDev, ipConn, errChan, &clientConfig.FEC)
 		}()
 		go func() {
 			defer proxyWg.Done()
-			common.ProxyFromVPNToTun(tunDev, ipConn, errChan)
+			common.ProxyFromVPNToTun(tunDev, ipConn, errChan, &clientConfig.FEC)
 		}()
 
 		// --- 等待错误或关闭信号 ---
