@@ -2,42 +2,42 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/iselt/masque-vpn)
 
-A VPN implementation based on the MASQUE (CONNECT-IP) protocol using QUIC transport.
+VPN-реализация на основе протокола MASQUE (CONNECT-IP) с использованием транспорта QUIC.
 
-**⚠️ This project is in early development and is not ready for production use. It is intended for educational purposes and to demonstrate the MASQUE protocol.**
+**⚠️ Этот проект находится на ранней стадии разработки и не готов для использования в продакшене. Он предназначен для образовательных целей и демонстрации протокола MASQUE.**
 
-**This project includes a submodule `connect-ip-go`. Please clone the repository with `--recurse-submodules`:**
+**Этот проект включает подмодуль `connect-ip-go`. Пожалуйста, клонируйте репозиторий с флагом `--recurse-submodules`:**
 
 ```bash
 git clone --recurse-submodules https://github.com/twogc/masque-vpn.git
 ```
 
-Or if you're using the original repository:
+Или если вы используете оригинальный репозиторий:
 
 ```bash
 git clone --recurse-submodules https://github.com/iselt/masque-vpn.git
 ```
 
-## Features
+## Возможности
 
-- **Modern Protocols**: Built on QUIC and MASQUE CONNECT-IP
-- **Mutual TLS Authentication**: Certificate-based client-server authentication
-- **Web Management UI**: Browser-based client management and configuration
-- **Cross-Platform**: Supports Windows, Linux, and macOS
-- **IP Pool Management**: Automatic client IP allocation and routing
-- **Real-time Monitoring**: Live client connection status
+- **Современные протоколы**: Построен на QUIC и MASQUE CONNECT-IP
+- **Взаимная TLS-аутентификация**: Аутентификация клиент-сервер на основе сертификатов
+- **Веб-интерфейс управления**: Управление клиентами и конфигурацией через браузер
+- **Кроссплатформенность**: Поддержка Windows, Linux и macOS
+- **Управление пулом IP**: Автоматическое выделение IP-адресов клиентам и маршрутизация
+- **Мониторинг в реальном времени**: Статус подключений клиентов в реальном времени
 
-## Architecture
+## Архитектура
 
-The system consists of:
-- **VPN Server**: Handles client connections and traffic routing
-- **VPN Client**: Connects to server and routes local traffic
-- **Web UI**: Management interface for certificates and clients
-- **Certificate System**: PKI-based authentication using mutual TLS
+Система состоит из:
+- **VPN-сервер**: Обрабатывает подключения клиентов и маршрутизацию трафика
+- **VPN-клиент**: Подключается к серверу и маршрутизирует локальный трафик
+- **Веб-интерфейс**: Интерфейс управления сертификатами и клиентами
+- **Система сертификатов**: PKI-аутентификация с использованием взаимного TLS
 
-## Quick Start
+## Быстрый старт
 
-### 1. Build
+### 1. Сборка
 
 ```bash
 cd vpn_client && go build
@@ -45,277 +45,283 @@ cd ../vpn_server && go build
 cd ../admin_webui && npm install && npm run build
 ```
 
-### 2. Certificate Setup
+### 2. Настройка сертификатов
 
 ```bash
 cd vpn_server/cert
-# Generate CA certificate
+# Генерация CA-сертификата
 sh gen_ca.sh
-# Generate server certificate
+# Генерация серверного сертификата
 sh gen_server_keypair.sh
 ```
 
-### 3. Server Configuration
+### 3. Конфигурация сервера
 
-Copy and edit the server configuration:
+Скопируйте и отредактируйте конфигурацию сервера:
 ```bash
 cp vpn_server/config.server.toml.example vpn_server/config.server.toml
 ```
 
-### 4. Start Server
+### 4. Запуск сервера
 
 ```bash
 cd vpn_server
-./vpn-server
+sudo ./vpn-server
 ```
 
-### 5. Web Management
+> **Примечание для macOS**: На macOS требуются права администратора для создания TUN-устройства.
 
-- Access: `http://<server-ip>:8080/`
-- Default credentials: `admin` / `admin`
-- Generate client configurations through the web interface
+### 5. Веб-управление
 
-### 6. Start Client
+- Адрес: `http://<server-ip>:8080/`
+- Учетные данные по умолчанию: `admin` / `admin`
+- Генерируйте конфигурации клиентов через веб-интерфейс
+
+### 6. Запуск клиента
 
 ```bash
 cd vpn_client
-./vpn-client
+sudo ./vpn-client
 ```
 
-## Configuration
+## Конфигурация
 
-### Server Configuration
+### Конфигурация сервера
 
-Key configuration options in `config.server.toml`:
+Основные параметры в `config.server.toml`:
 
-| Option | Description | Example |
-|--------|-------------|---------|
-| `listen_addr` | Server listening address | `"0.0.0.0:4433"` |
-| `assign_cidr` | IP range for clients | `"10.0.0.0/24"` |
-| `advertise_routes` | Routes to advertise | `["0.0.0.0/0"]` |
-| `cert_file` | Server certificate path | `"cert/server.crt"` |
-| `key_file` | Server private key path | `"cert/server.key"` |
+| Параметр | Описание | Пример |
+|----------|----------|--------|
+| `listen_addr` | Адрес прослушивания сервера | `"0.0.0.0:4433"` |
+| `assign_cidr` | Диапазон IP для клиентов | `"10.0.0.0/24"` |
+| `advertise_routes` | Маршруты для анонсирования | `["0.0.0.0/0"]` |
+| `cert_file` | Путь к серверному сертификату | `"cert/server.crt"` |
+| `key_file` | Путь к приватному ключу сервера | `"cert/server.key"` |
 
-### Client Configuration
+### Конфигурация клиента
 
-Generated automatically via Web UI or manually configured:
+Генерируется автоматически через веб-интерфейс или настраивается вручную:
 
-| Option | Description |
-|--------|-------------|
-| `server_addr` | VPN server address |
-| `server_name` | Server name for TLS |
-| `ca_pem` | CA certificate (embedded) |
-| `cert_pem` | Client certificate (embedded) |
-| `key_pem` | Client private key (embedded) |
+| Параметр | Описание |
+|----------|----------|
+| `server_addr` | Адрес VPN-сервера |
+| `server_name` | Имя сервера для TLS |
+| `ca_pem` | CA-сертификат (встроенный) |
+| `cert_pem` | Клиентский сертификат (встроенный) |
+| `key_pem` | Приватный ключ клиента (встроенный) |
 
-## Web Management Interface
+## Веб-интерфейс управления
 
-The web interface provides:
+Веб-интерфейс предоставляет:
 
-- **Client Management**: Generate, download, and delete client configurations
-- **Live Monitoring**: View connected clients and their IP assignments
-- **Certificate Management**: Automated certificate generation and distribution
-- **Configuration**: Server settings management
+- **Управление клиентами**: Генерация, загрузка и удаление конфигураций клиентов
+- **Мониторинг в реальном времени**: Просмотр подключенных клиентов и их IP-адресов
+- **Управление сертификатами**: Автоматическая генерация и распространение сертификатов
+- **Конфигурация**: Управление настройками сервера
 
-## Technical Details
+## Технические детали
 
-### Dependencies
+### Зависимости
 
-- **QUIC**: [quic-go](https://github.com/quic-go/quic-go) - QUIC protocol implementation
-- **MASQUE**: [connect-ip-go](https://github.com/quic-go/connect-ip-go) - MASQUE CONNECT-IP protocol
-- **Database**: SQLite for client and configuration storage
-- **TUN**: Cross-platform TUN device management
+- **QUIC**: [quic-go](https://github.com/quic-go/quic-go) - реализация протокола QUIC
+- **MASQUE**: [connect-ip-go](https://github.com/quic-go/connect-ip-go) - протокол MASQUE CONNECT-IP
+- **База данных**: SQLite для хранения клиентов и конфигурации
+- **TUN**: Кроссплатформенное управление TUN-устройствами
 
-### Security
+### Безопасность
 
-- **Mutual TLS**: Both client and server authenticate using certificates
-- **Certificate Authority**: Self-signed CA for certificate management
-- **Unique Client IDs**: Each client has a unique identifier
-- **IP Isolation**: Clients receive individual IP assignments
+- **Взаимный TLS**: Клиент и сервер аутентифицируются с использованием сертификатов
+- **Центр сертификации**: Самоподписанный CA для управления сертификатами
+- **Уникальные ID клиентов**: Каждый клиент имеет уникальный идентификатор
+- **Изоляция IP**: Клиенты получают индивидуальные IP-адреса
 
-## Development
+## Разработка
 
-### Project Structure
+### Структура проекта
 
 ```
 masque-vpn/
-├── common/           # Shared code and utilities
-├── vpn_client/       # Client implementation
-├── vpn_server/       # Server implementation
-│   └── cert/         # Certificate generation scripts
-├── admin_webui/      # Web UI assets
+├── common/           # Общий код и утилиты
+├── vpn_client/       # Реализация клиента
+├── vpn_server/       # Реализация сервера
+│   └── cert/         # Скрипты генерации сертификатов
+├── admin_webui/      # Ресурсы веб-интерфейса
 └── README.md
 ```
 
-### Building from Source
+### Сборка из исходников
 
-Requirements:
-- Go 1.24.2 or later
-- OpenSSL (for certificate generation)
+Требования:
+- Go 1.25.0 или новее
+- OpenSSL (для генерации сертификатов)
+- Node.js и npm (для веб-интерфейса)
 
-## Troubleshooting
+## Решение проблем
 
-### Common Issues
+### Распространенные проблемы
 
-1. **Certificate Errors**: Ensure CA and certificates are properly generated
-2. **Permission Issues**: TUN device creation requires administrator privileges
-3. **Firewall**: Ensure server port (default 4433) is accessible
-4. **MTU Issues**: Adjust MTU settings if experiencing connectivity problems
+1. **Ошибки сертификатов**: Убедитесь, что CA и сертификаты правильно сгенерированы
+2. **Проблемы с правами**: Создание TUN-устройства требует прав администратора
+3. **Firewall**: Убедитесь, что порт сервера (по умолчанию 4433) доступен
+4. **Проблемы с MTU**: Настройте параметры MTU при проблемах с подключением
 
+### Проблемы на macOS
 
-### macOS-Specific Issues
+На macOS могут возникать специфические проблемы с TUN-устройствами:
 
-#### Technical Details
+1. **"Destination address required"**: Исправлено в текущей версии - TUN-устройства на macOS требуют point-to-point конфигурации
+2. **"Slice bounds out of range"**: Исправлено - WireGuard TUN на macOS требует минимум 4 байта offset
 
-**Point-to-Point Interfaces**
+#### Техническая информация
 
-TUN devices on macOS create a virtual point-to-point tunnel between two endpoints:
-- **Server (local)**: gateway IP (e.g., 10.0.0.1)
-- **Client (destination)**: next IP address (e.g., 10.0.0.2)
+**Point-to-Point интерфейсы**
 
-The `Next()` method from the `netip` package returns the next IP address:
+TUN-устройства на macOS создают виртуальный туннель между двумя точками:
+- **Сервер (local)**: gateway IP (например, 10.0.0.1)
+- **Клиент (destination)**: следующий IP (например, 10.0.0.2)
+
+Метод `Next()` из пакета `netip` возвращает следующий IP-адрес:
 - `10.0.0.1.Next()` → `10.0.0.2`
 - `192.168.1.1.Next()` → `192.168.1.2`
 
 **WireGuard TUN Offset**
 
-WireGuard TUN on macOS uses an offset for packet header placement:
-- **4 bytes** - minimum offset required for macOS
-- **10 bytes** - used in `proxy.go` (VirtioNetHdrLen)
+WireGuard TUN на macOS использует offset для размещения служебной информации:
+- **4 байта** - минимальный offset для macOS
+- **10 байт** - используется в `proxy.go` (VirtioNetHdrLen)
 
-The offset indicates where packet data begins in the buffer. The library writes the header before this position:
+Offset указывает, с какой позиции в буфере начинаются данные пакета. Библиотека записывает заголовок перед этой позицией:
 
 ```
-Buffer: [header (4 bytes)][packet data (n bytes)]
+Буфер: [header (4 bytes)][packet data (n bytes)]
                          ^
                          offset=4
 ```
 
-**Platform Compatibility**
+**Совместимость**
 
-These fixes are macOS-specific and don't affect other platforms:
-- **Linux**: uses `tun_linux.go`
-- **Windows**: uses `tun_windows.go`
-## Contributing
+Эти исправления специфичны для macOS и не влияют на работу на других платформах:
+- **Linux**: использует `tun_linux.go`
+- **Windows**: использует `tun_windows.go`
 
-This project is for educational purposes. Contributions are welcome for:
-- Protocol improvements
-- Cross-platform compatibility
-- Documentation enhancements
-- Bug fixes
 
-## References
+## Участие в разработке
 
-- [MASQUE Protocol Specification](https://datatracker.ietf.org/doc/draft-ietf-masque-connect-ip/)
-- [QUIC Protocol](https://datatracker.ietf.org/doc/rfc9000/)
-- [quic-go Library](https://github.com/quic-go/quic-go)
-- [connect-ip-go Library](https://github.com/quic-go/connect-ip-go)
+Этот проект создан в образовательных целях. Приветствуются вклады в:
+- Улучшения протокола
+- Кроссплатформенная совместимость
+- Улучшения документации
+- Исправления ошибок
 
-### Standards and RFCs
+## Ссылки
 
-- **MASQUE CONNECT-IP**: [RFC 9484](https://datatracker.ietf.org/doc/html/rfc9484) - Proxying IP in HTTP
-- **MASQUE CONNECT-UDP**: [RFC 9298](https://datatracker.ietf.org/doc/html/rfc9298) - Proxying UDP in HTTP
-- **QUIC Transport**: [RFC 9000](https://datatracker.ietf.org/doc/html/rfc9000) - QUIC: A UDP-Based Multiplexed and Secure Transport
-- **HTTP Datagrams**: [RFC 9297](https://datatracker.ietf.org/doc/html/rfc9297) - HTTP Datagrams and the Capsule Protocol
+- [Спецификация протокола MASQUE](https://datatracker.ietf.org/doc/draft-ietf-masque-connect-ip/)
+- [Протокол QUIC](https://datatracker.ietf.org/doc/rfc9000/)
+- [Библиотека quic-go](https://github.com/quic-go/quic-go)
+- [Библиотека connect-ip-go](https://github.com/quic-go/connect-ip-go)
 
-This project is built upon the following open-source libraries:
+### Стандарты и RFC
 
-* [quic-go](https://github.com/quic-go/quic-go) - A QUIC implementation in Go
-* [connect-ip-go](https://github.com/quic-go/connect-ip-go) - A Go implementation of the MASQUE CONNECT-IP protocol
+- **MASQUE CONNECT-IP**: [RFC 9484](https://datatracker.ietf.org/doc/html/rfc9484) - Проксирование IP в HTTP
+- **MASQUE CONNECT-UDP**: [RFC 9298](https://datatracker.ietf.org/doc/html/rfc9298) - Проксирование UDP в HTTP
+- **QUIC Transport**: [RFC 9000](https://datatracker.ietf.org/doc/html/rfc9000) - QUIC: Мультиплексированный и защищенный транспорт на основе UDP
+- **HTTP Datagrams**: [RFC 9297](https://datatracker.ietf.org/doc/html/rfc9297) - HTTP-датаграммы и протокол Capsule
 
-## For MPEI Students and Researchers
+Этот проект построен на следующих библиотеках с открытым исходным кодом:
 
-This project is part of the educational materials for the National Research University "MPEI" (Moscow Power Engineering Institute) course on modern network protocols for autonomous systems (UAS - Unmanned Aerial Systems).
+* [quic-go](https://github.com/quic-go/quic-go) - Реализация QUIC на Go
+* [connect-ip-go](https://github.com/quic-go/connect-ip-go) - Реализация протокола MASQUE CONNECT-IP на Go
 
-### Connection to MPEI Curriculum
+## Для студентов и исследователей НИУ МЭИ
 
-This implementation demonstrates **MASQUE CONNECT-IP (RFC 9484)** - a modern protocol for tunneling IP packets over HTTP/3 (QUIC), which is covered in the National Research University "MPEI" course "Personnel for Autonomous Systems".
+Этот проект является частью образовательных материалов для курса Национального исследовательского университета «МЭИ» (Московский энергетический институт) по современным сетевым протоколам для автономных систем (БАС - беспилотные авиационные системы).
 
-**Course Resources:**
-- OpenEdu Course: [openedu.mpei.ru/course/BAS_2](https://openedu.mpei.ru/course/BAS_2)
-- Federal Project: "Personnel for Autonomous Systems"
+### Связь с учебной программой НИУ МЭИ
 
-### Why MASQUE for Autonomous Systems?
+Эта реализация демонстрирует **MASQUE CONNECT-IP (RFC 9484)** - современный протокол для туннелирования IP-пакетов через HTTP/3 (QUIC), который рассматривается в курсе НИУ МЭИ «Кадры для автономных систем».
 
-MASQUE CONNECT-IP solves critical connectivity challenges for autonomous systems:
+**Ресурсы курса:**
+- Курс на OpenEdu: [openedu.mpei.ru/course/BAS_2](https://openedu.mpei.ru/course/BAS_2)
+- Федеральный проект: «Кадры для автономных систем»
 
-1. **Corporate Network Bypass**: Many corporate networks block UDP traffic. MASQUE tunnels IP packets over QUIC (UDP:443), making it look like HTTPS traffic and bypassing firewalls.
+### Почему MASQUE для автономных систем?
 
-2. **Mobile Network Optimization**: QUIC's built-in features (0-RTT, connection migration, multiplexing) provide better performance than traditional VPN protocols in mobile scenarios.
+MASQUE CONNECT-IP решает критические проблемы связности для автономных систем:
 
-3. **Standards-Based**: Unlike proprietary VPN solutions, MASQUE is an IETF standard (RFC 9484), ensuring interoperability and future compatibility.
+1. **Обход корпоративных сетей**: Многие корпоративные сети блокируют UDP-трафик. MASQUE туннелирует IP-пакеты через QUIC (UDP:443), делая их похожими на HTTPS-трафик и обходя файрволы.
 
-### Research Topics for Students
+2. **Оптимизация для мобильных сетей**: Встроенные возможности QUIC (0-RTT, миграция соединений, мультиплексирование) обеспечивают лучшую производительность, чем традиционные VPN-протоколы в мобильных сценариях.
 
-This project can serve as a foundation for diploma work, research projects, or laboratory assignments:
+3. **Основан на стандартах**: В отличие от проприетарных VPN-решений, MASQUE является стандартом IETF (RFC 9484), обеспечивающим совместимость и будущую поддержку.
 
-#### 1. Performance Analysis
-- Compare MASQUE VPN performance vs traditional VPN protocols (OpenVPN, WireGuard)
-- Measure latency, throughput, and jitter under different network conditions
-- Analyze QUIC connection migration impact on VPN stability
+### Темы исследований для студентов
 
-#### 2. Security Evaluation
-- Evaluate mutual TLS authentication implementation
-- Analyze certificate management and PKI security
-- Study anti-replay mechanisms for 0-RTT connections
+Этот проект может служить основой для дипломных работ, исследовательских проектов или лабораторных заданий:
 
-#### 3. Network Optimization
-- Implement and test BBRv3 congestion control for MASQUE tunnels
-- Optimize IP pool management and routing algorithms
-- Study the impact of packet loss on VPN performance
+#### 1. Анализ производительности
+- Сравнение производительности MASQUE VPN с традиционными VPN-протоколами (OpenVPN, WireGuard)
+- Измерение задержки, пропускной способности и джиттера в различных сетевых условиях
+- Анализ влияния миграции соединений QUIC на стабильность VPN
 
-#### 4. Integration with Autonomous Systems
-- Integrate MASQUE VPN with ground control stations
-- Implement handover prediction for mobile scenarios
-- Design failover mechanisms for critical connections
+#### 2. Оценка безопасности
+- Оценка реализации взаимной TLS-аутентификации
+- Анализ управления сертификатами и безопасности PKI
+- Изучение механизмов защиты от повторов для 0-RTT соединений
 
-#### 5. Protocol Extensions
-- Implement additional MASQUE features (CONNECT-UDP for specific use cases)
-- Add support for IPv6 tunneling
-- Integrate with AI-based routing systems
+#### 3. Оптимизация сети
+- Реализация и тестирование управления перегрузкой BBRv3 для MASQUE-туннелей
+- Оптимизация управления пулом IP и алгоритмов маршрутизации
+- Изучение влияния потери пакетов на производительность VPN
 
-### Laboratory Assignments
+#### 4. Интеграция с автономными системами
+- Интеграция MASQUE VPN с наземными станциями управления
+- Реализация предсказания хэндовера для мобильных сценариев
+- Разработка механизмов отказоустойчивости для критических соединений
 
-**Basic Level:**
-1. Set up MASQUE VPN server and client
-2. Configure certificate-based authentication
-3. Test connectivity through corporate firewalls
-4. Monitor connection metrics (latency, throughput)
+#### 5. Расширения протокола
+- Реализация дополнительных функций MASQUE (CONNECT-UDP для специфических случаев)
+- Добавление поддержки IPv6-туннелирования
+- Интеграция с системами маршрутизации на основе ИИ
 
-**Advanced Level:**
-1. Implement custom routing policies
-2. Add performance monitoring and metrics collection
-3. Integrate with network emulation tools (tc, netem)
-4. Compare performance with traditional VPN solutions
+### Лабораторные задания
 
-**Research Level:**
-1. Implement and test protocol optimizations
-2. Design and evaluate new features
-3. Publish results in academic conferences
-4. Contribute improvements back to the project
+**Базовый уровень:**
+1. Настройка MASQUE VPN сервера и клиента
+2. Конфигурация аутентификации на основе сертификатов
+3. Тестирование связности через корпоративные файрволы
+4. Мониторинг метрик соединения (задержка, пропускная способность)
 
-### Getting Started for Research
+**Продвинутый уровень:**
+1. Реализация пользовательских политик маршрутизации
+2. Добавление мониторинга производительности и сбора метрик
+3. Интеграция с инструментами эмуляции сети (tc, netem)
+4. Сравнение производительности с традиционными VPN-решениями
 
-1. **Fork this repository**: Create your own fork for experiments
-2. **Read the code**: Understand the architecture in `vpn_server/` and `vpn_client/`
-3. **Set up test environment**: Use network emulation to simulate various conditions
-4. **Collect metrics**: Implement logging and monitoring for your research
-5. **Document findings**: Write reports comparing different configurations
+**Исследовательский уровень:**
+1. Реализация и тестирование оптимизаций протокола
+2. Разработка и оценка новых функций
+3. Публикация результатов на академических конференциях
+4. Внесение улучшений обратно в проект
 
-### Contact and Collaboration
+### Начало работы для исследований
 
-For questions about using this project in National Research University "MPEI" research:
-- Check the original repository: [iselt/masque-vpn](https://github.com/iselt/masque-vpn)
-- CloudBridge Research: [2gc.ru](https://2gc.ru)
+1. **Форк репозитория**: Создайте свой форк для экспериментов
+2. **Изучите код**: Разберитесь с архитектурой в `vpn_server/` и `vpn_client/`
+3. **Настройте тестовое окружение**: Используйте эмуляцию сети для симуляции различных условий
+4. **Собирайте метрики**: Реализуйте логирование и мониторинг для вашего исследования
+5. **Документируйте результаты**: Пишите отчеты, сравнивающие различные конфигурации
 
-### Related Projects
+### Контакты и сотрудничество
 
-- [CloudBridge QUIC Test Suite](https://github.com/twogc/cloudbridge-relay-installer) - QUIC protocol testing and benchmarking
-- [CloudBridge Research](https://cloudbridge-research.ru) - Research documentation and publications
+По вопросам использования этого проекта в исследованиях НИУ МЭИ:
+- Проверьте оригинальный репозиторий: [iselt/masque-vpn](https://github.com/iselt/masque-vpn)
 
-## 中文文档
+### Связанные проекты
 
-请参考 [README_zh.md](README_zh.md) 获取中文使用说明。
+- [CloudBridge QUIC Test Suite](https://github.com/twogc/quic-test) - Тестирование и бенчмаркинг протокола QUIC
+- [CloudBridge Research](https://cloudbridge-research.ru) - Исследовательская документация и публикации
+
 ## Документация на других языках
 
-Русская документация: [README_ru.md](README_ru.md)
+- [English](README_en.md) - English documentation
+- [中文文档](README_zh.md) - Chinese documentation

@@ -1,6 +1,6 @@
 module github.com/iselt/masque-vpn/common
 
-go 1.24.2
+go 1.25.0
 
 require (
 	github.com/iselt/connect-ip-go v0.0.0-20250409071859-bc9a9fcba51d
