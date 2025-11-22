@@ -250,5 +250,5 @@ sudo tc qdisc add dev eth0 root tbf rate 1mbit burst 32kbit latency 400ms
 
 Для вопросов и сотрудничества:
 - Оригинальный репозиторий: [iselt/masque-vpn](https://github.com/iselt/masque-vpn)
-- CloudBridge Research: [2gc.ru](https://2gc.ru)
+- CloudBridge Research: [cloudbridge-research.ru](https://cloudbridge-research.ru)
 - Материалы курса МЭИ: [openedu.mpei.ru/course/BAS_2](https://openedu.mpei.ru/course/BAS_2)

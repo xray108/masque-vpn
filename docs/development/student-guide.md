@@ -237,5 +237,5 @@ See [monitoring/prometheus-setup.md](../monitoring/prometheus-setup.md) for deta
 
 For questions and collaboration:
 - Check original repository: [iselt/masque-vpn](https://github.com/iselt/masque-vpn)
-- CloudBridge Research: [2gc.ru](https://2gc.ru)
+- CloudBridge Research: [cloudbridge-research.ru](https://cloudbridge-research.ru)
 - MPEI course materials: [openedu.mpei.ru/course/BAS_2](https://openedu.mpei.ru/course/BAS_2)
