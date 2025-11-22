@@ -3,6 +3,7 @@
   "navigation": {
     "home": "首页",
     "clientManagement": "客户端管理",
+    "monitoring": "监控",
     "groupManagement": "分组管理",
     "policyManagement": "策略管理",
     "serverSettings": "服务器配置",

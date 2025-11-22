@@ -3,6 +3,7 @@
   "navigation": {
     "home": "Главная",
     "clientManagement": "Управление клиентами",
+    "monitoring": "Мониторинг",
     "groupManagement": "Управление группами",
     "policyManagement": "Управление политиками",
     "serverSettings": "Настройки сервера",

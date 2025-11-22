@@ -3,6 +3,7 @@
   "navigation": {
     "home": "Home",
     "clientManagement": "Client Management",
+    "monitoring": "Monitoring",
     "groupManagement": "Group Management",
     "policyManagement": "Policy Management",
     "serverSettings": "Server Settings",

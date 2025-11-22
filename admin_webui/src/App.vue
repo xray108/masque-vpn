@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from './store/user'
 import {
   Setting, House, Tickets, InfoFilled, User, Lock, 
-  Expand, Fold, ArrowDown, Operation
+  Expand, Fold, ArrowDown, Operation, DataLine
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, ElConfigProvider } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -27,6 +27,10 @@ const handleLanguageChange = (lang: string) => {
     localStorage.setItem('preferredLanguage', lang)
     currentLanguage.value = lang
   }
+}
+
+const openMonitoring = () => {
+  window.open('http://' + window.location.hostname + ':3000', '_blank')
 }
 
 const handleCommand = (command: string) => {
@@ -84,6 +88,10 @@ watch(locale, (newLocale) => {
           <el-menu-item index="/server-list">
             <el-icon><Tickets /></el-icon>
             <span>{{ t('navigation.clientManagement') }}</span>
+          </el-menu-item>
+          <el-menu-item index="monitoring" @click="openMonitoring">
+            <el-icon><DataLine /></el-icon>
+            <span>{{ t('navigation.monitoring') }}</span>
           </el-menu-item>
           <el-menu-item index="/groups">
             <el-icon><User /></el-icon>

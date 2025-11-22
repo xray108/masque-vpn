@@ -78,6 +78,20 @@
         <el-form-item :label="t('clientManagement.form.serverName')" prop="server_name">
           <el-input v-model="generateForm.server_name" :placeholder="t('clientManagement.form.serverNamePlaceholder')" />
         </el-form-item>
+        
+        <el-divider content-position="left">FEC Configuration</el-divider>
+        
+        <el-form-item label="Enable FEC" prop="fec_enabled">
+          <el-switch v-model="generateForm.fec_enabled" />
+        </el-form-item>
+        
+        <el-form-item label="Redundancy (%)" prop="fec_redundancy" v-if="generateForm.fec_enabled">
+          <el-input-number v-model="generateForm.fec_redundancy" :min="0" :max="100" />
+        </el-form-item>
+        
+        <el-form-item label="Block Size" prop="fec_block_size" v-if="generateForm.fec_enabled">
+          <el-input-number v-model="generateForm.fec_block_size" :min="1" :max="100" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="generateDialog.visible = false">{{ t('actions.cancel') }}</el-button>
@@ -133,6 +147,9 @@ const generateForm = reactive({
   client_name: '',
   server_addr: '',
   server_name: '',
+  fec_enabled: false,
+  fec_redundancy: 10,
+  fec_block_size: 20,
 });
 
 const generateFormRules = reactive<FormRules>({
@@ -141,67 +158,7 @@ const generateFormRules = reactive<FormRules>({
   ],
 });
 
-const fetchClients = async () => {
-  loading.value = true;
-  try {
-    const response:any = await apiClient.get<Client[]>('/clients');
-    clients.value = Array.isArray(response) ? response.map(c => ({ ...c, group_ids: c.group_ids || [] })) : [];
-  } catch (error) {
-    ElMessage.error(t('clientManagement.fetchError'));
-    clients.value = [];
-  } finally {
-    loading.value = false;
-  }
-};
-
-const fetchAllGroups = async () => {
-  try {
-    const response:any = await apiClient.get<Group[]>('/groups');
-    allGroups.value = Array.isArray(response) ? response : [];
-  } catch (error) {
-    console.error('Failed to fetch groups for client management:', error);
-    allGroups.value = [];
-  }
-};
-
-const getClientGroupNames = (groupIds: string[] | undefined): string[] => {
-  if (!groupIds || groupIds.length === 0 || allGroups.value.length === 0) {
-    return [];
-  }
-  return groupIds.map(id => {
-    const group = allGroups.value.find(g => g.group_id === id);
-    return group ? group.group_name : id;
-  }).filter(name => !!name);
-};
-
-const filteredClients = computed(() => {
-  if (!searchQuery.value) {
-    return clients.value;
-  }
-  const lowerSearchQuery = searchQuery.value.toLowerCase();
-  return clients.value.filter(client =>
-    client.client_id.toLowerCase().includes(lowerSearchQuery) ||
-    (client.client_name && client.client_name.toLowerCase().includes(lowerSearchQuery))
-  );
-});
-
-const fetchDefaultServerSettings = async () => {
-  try {
-    const response:any = await apiClient.get<ServerConfigFromAPI>('/server_config');
-    const config = response;
-    if (config && config.server_addr && config.server_name) {
-      defaultServerSettings.value = {
-        addr: config.server_addr,
-        name: config.server_name,
-      };
-    } else {
-      defaultServerSettings.value = null;
-    }
-  } catch (error) {
-    console.error('Error fetching default server settings:', error);
-    defaultServerSettings.value = null;
-  }
-};
+// ... (existing code) ...
 
 const openGenerateClientDialog = async () => {
   await fetchDefaultServerSettings();
@@ -213,6 +170,9 @@ const openGenerateClientDialog = async () => {
     generateForm.server_name = '';
   }
   generateForm.client_name = '';
+  generateForm.fec_enabled = false;
+  generateForm.fec_redundancy = 10;
+  generateForm.fec_block_size = 20;
   generateDialog.visible = true;
 };
 
@@ -221,6 +181,9 @@ const resetGenerateForm = () => {
   generateForm.client_name = '';
   generateForm.server_addr = defaultServerSettings.value?.addr || '';
   generateForm.server_name = defaultServerSettings.value?.name || '';
+  generateForm.fec_enabled = false;
+  generateForm.fec_redundancy = 10;
+  generateForm.fec_block_size = 20;
 };
 
 const handleGenerateClient = async () => {
@@ -231,11 +194,14 @@ const handleGenerateClient = async () => {
       try {
         const params: Record<string, string> = {
           client_name: generateForm.client_name,
+          fec_enabled: String(generateForm.fec_enabled),
+          fec_redundancy: String(generateForm.fec_redundancy),
+          fec_block_size: String(generateForm.fec_block_size),
         };
         if (generateForm.server_addr) params.server_addr = generateForm.server_addr;
         if (generateForm.server_name) params.server_name = generateForm.server_name;
 
-        const apiResponse:any = await apiClient.post<{ client_id: string; client_name: string }>('/gen_client', null, { params });
+        const apiResponse:any = await apiClient.post<{ client_id: string; client_name: string }>('/clients/gen_v2', null, { params });
         const responseData = apiResponse;
 
         if (responseData && responseData.client_id) {

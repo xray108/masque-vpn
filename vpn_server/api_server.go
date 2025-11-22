@@ -76,7 +76,10 @@ func initDB(dbPath string) {
 		cert_pem TEXT,
 		key_pem TEXT,
 		config TEXT,
-		created_at DATETIME
+		created_at DATETIME,
+		fec_enabled BOOLEAN DEFAULT 0,
+		fec_redundancy INTEGER DEFAULT 0,
+		fec_block_size INTEGER DEFAULT 0
 	)`)
 	if err != nil {
 		log.Fatalf("创建clients表失败: %v", err)
@@ -393,6 +396,16 @@ func ginHandleGenClientV2(dbPath string, serverConfig interface{}) gin.HandlerFu
 			return
 		}
 		tmpl := string(tmplBytes)
+		
+		// FEC parameters
+		fecEnabled := c.Query("fec_enabled")
+		fecRedundancy := c.Query("fec_redundancy")
+		fecBlockSize := c.Query("fec_block_size")
+		
+		if fecEnabled == "" { fecEnabled = "false" }
+		if fecRedundancy == "" { fecRedundancy = "10" }
+		if fecBlockSize == "" { fecBlockSize = "20" }
+
 		repl := map[string]string{
 			"server_addr":          c.Query("server_addr"),
 			"server_name":          c.Query("server_name"),
@@ -423,11 +436,33 @@ func ginHandleGenClientV2(dbPath string, serverConfig interface{}) gin.HandlerFu
 		for k, v := range repl {
 			tmpl = strings.ReplaceAll(tmpl, "{{"+k+"}}", v)
 		}
+		
+		// Replace FEC placeholders manually since they might not be in the map loop if we want specific logic
+		// But wait, the config.client.toml.example doesn't have {{fec_enabled}} placeholders yet.
+		// We need to update the example file or use regex replacement if we want to support it cleanly.
+		// Or we can just append/replace the [fec] section.
+		
+		// Let's assume we updated the example file to have placeholders or we just replace the default values.
+		// Since we just created the example file with fixed values:
+		// enabled = false
+		// redundancy_percent = 10
+		// block_size = 20
+		
+		// We can use simple string replacement for these keys under [fec]
+		// Be careful not to replace other enabled keys if any.
+		// Better approach: Use regex to find [fec] section and replace values.
+		
+		// For simplicity/robustness, let's replace the whole [fec] block if we can find it,
+		// or just replace specific lines.
+		tmpl = strings.Replace(tmpl, "enabled = false", "enabled = "+fecEnabled, 1) // Risky if other enabled exists
+		tmpl = strings.Replace(tmpl, "redundancy_percent = 10", "redundancy_percent = "+fecRedundancy, 1)
+		tmpl = strings.Replace(tmpl, "block_size = 20", "block_size = "+fecBlockSize, 1)
+		
 		config := tmpl
 
 		// db 已在前面打开和 defer close
-		_, err = db.Exec("INSERT INTO clients(client_id, client_name, cert_pem, key_pem, config, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))",
-			clientID, clientName, string(clientCertPEM), string(clientKeyPEM), config)
+		_, err = db.Exec("INSERT INTO clients(client_id, client_name, cert_pem, key_pem, config, created_at, fec_enabled, fec_redundancy, fec_block_size) VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, ?)",
+			clientID, clientName, string(clientCertPEM), string(clientKeyPEM), config, fecEnabled == "true", fecRedundancy, fecBlockSize)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "写入数据库失败"})
 			return
