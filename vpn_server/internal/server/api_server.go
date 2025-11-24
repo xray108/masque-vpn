@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"crypto/rand"
@@ -496,7 +496,7 @@ func ginHandleDownloadClient(dbPath string) gin.HandlerFunc {
 	}
 }
 
-func ginHandleDeleteClient(dbPath string, ipPoolMu *sync.Mutex, clientIPMap map[string]netip.Addr, ipConnMap map[netip.Addr]*ClientSession) gin.HandlerFunc {
+func ginHandleDeleteClient(dbPath string, ipPoolMu *sync.RWMutex, clientIPMap map[string]netip.Addr, ipConnMap map[netip.Addr]*ClientSession) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Query("id")
 		if id == "" {
@@ -508,7 +508,7 @@ func ginHandleDeleteClient(dbPath string, ipPoolMu *sync.Mutex, clientIPMap map[
 			if ip, ok := clientIPMap[id]; ok {
 				if session, ok2 := ipConnMap[ip]; ok2 {
 					log.Printf("主动断开客户端 %s (IP: %s) 的连接", id, ip)
-					session.conn.Close()
+					session.Conn.Close()
 					delete(ipConnMap, ip)
 				}
 				delete(clientIPMap, id)
@@ -531,14 +531,14 @@ func ginHandleDeleteClient(dbPath string, ipPoolMu *sync.Mutex, clientIPMap map[
 }
 
 // 主启动函数
-func StartAPIServer(ipPoolMu *sync.Mutex, clientIPMap map[string]netip.Addr, ipConnMap map[netip.Addr]*ClientSession, serverCfg common.ServerConfig) {
+func StartAPIServer(s *Server) {
 	log.Println("API Server is starting or restarting. Session store is being initialized.")
 	
 	// Update global variables for use in handlers
-	globalClientIPMap = clientIPMap
-	globalIPConnMap = ipConnMap
+	globalClientIPMap = s.ClientIPMap
+	globalIPConnMap = s.IPConnMap
 
-	dbPath := serverCfg.APIServer.DatabasePath
+	dbPath := s.Config.APIServer.DatabasePath
 	initDB(dbPath)
 
 	// Check for existing config in DB or initialize
@@ -552,9 +552,9 @@ func StartAPIServer(ipPoolMu *sync.Mutex, clientIPMap map[string]netip.Addr, ipC
 		if errors.Is(err, sql.ErrNoRows) || count == 0 {
 			log.Println("No server config found in DB. Initializing from server.toml settings...")
 			initialDbConfig := ServerConfigDB{
-				ServerAddr: serverCfg.ListenAddr, // VPN 服务器的监听地址，供客户端连接
-				ServerName: serverCfg.ServerName,
-				MTU:        serverCfg.MTU,
+				ServerAddr: s.Config.ListenAddr, // VPN 服务器的监听地址，供客户端连接
+				ServerName: s.Config.ServerName,
+				MTU:        s.Config.MTU,
 			}
 			if initialDbConfig.MTU == 0 { // 如果 server.toml 中 MTU 未设置或为0，则使用默认值
 				initialDbConfig.MTU = 1413
@@ -614,15 +614,15 @@ func StartAPIServer(ipPoolMu *sync.Mutex, clientIPMap map[string]netip.Addr, ipC
 			auth.GET("/server_config", ginHandleGetServerConfig(dbPath))
 			auth.POST("/server_config", ginHandleSetServerConfig(dbPath))
 
-			auth.GET("/clients", ginHandleListClients(dbPath, clientIPMap))
-			auth.POST("/clients/gen_v2", ginHandleGenClientV2(dbPath, serverCfg))
+			auth.GET("/clients", ginHandleListClients(dbPath, s.ClientIPMap))
+			auth.POST("/clients/gen_v2", ginHandleGenClientV2(dbPath, s.Config))
 			auth.GET("/clients/download", ginHandleDownloadClient(dbPath))
-			auth.DELETE("/clients", ginHandleDeleteClient(dbPath, ipPoolMu, clientIPMap, ipConnMap))
+			auth.DELETE("/clients", ginHandleDeleteClient(dbPath, &s.IPPoolMu, s.ClientIPMap, s.IPConnMap))
 			// 新增：踢出客户端（同删除，但不删DB）- 暂时复用删除逻辑，或者单独实现
-			auth.POST("/clients/kick", ginHandleDeleteClient(dbPath, ipPoolMu, clientIPMap, ipConnMap)) // 复用删除逻辑，或者需要单独的Kick逻辑
+			auth.POST("/clients/kick", ginHandleDeleteClient(dbPath, &s.IPPoolMu, s.ClientIPMap, s.IPConnMap)) // 复用删除逻辑，或者需要单独的Kick逻辑
 
 			auth.GET("/groups", ginHandleListGroups(dbPath))
-			auth.POST("/groups", ginHandleAddGroup(dbPath, serverCfg))
+			auth.POST("/groups", ginHandleAddGroup(dbPath, s.Config))
 			auth.DELETE("/groups", ginHandleDeleteGroup(dbPath))
 			auth.PUT("/groups", ginHandleUpdateGroup(dbPath))
 
@@ -638,7 +638,7 @@ func StartAPIServer(ipPoolMu *sync.Mutex, clientIPMap map[string]netip.Addr, ipC
 	}
 
 	// 读取监听地址
-	listenAddr := serverCfg.APIServer.ListenAddr
+	listenAddr := s.Config.APIServer.ListenAddr
 	if listenAddr == "" {
 		listenAddr = ":8080" // 默认
 		log.Printf("APIServerListenAddr 未配置，使用默认值: %s", listenAddr)
@@ -1056,7 +1056,7 @@ func refreshAccessControlForGroup(dbPath string, groupID string, clientIPMap map
 					// 重新获取并应用策略
 					// 注意：getGroupsAndPoliciesForClient 在 main.go 中定义，但属于同一个 package main，可以直接调用
 					groupIDs, policies := getGroupsAndPoliciesForClient(dbPath, clientID)
-					session.conn.SetAccessControl(clientID, groupIDs, policies)
+					session.Conn.SetAccessControl(clientID, groupIDs, policies)
 					log.Printf("[ACL] 已刷新客户端 %s 的访问控制策略", clientID)
 				}
 			}

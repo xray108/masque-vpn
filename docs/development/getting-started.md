@@ -8,6 +8,15 @@ This guide explains how to build and run the masque-vpn server.
 - OpenSSL (for certificate generation)
 - Linux, macOS, or Windows
 
+## Project Structure
+
+For developers interested in the codebase:
+
+- `vpn_server/`: Server entry point (`main.go`).
+- `vpn_server/internal/server/`: Core server logic, API, and metrics.
+- `vpn_client/`: Client implementation.
+- `common/`: Shared utilities and libraries.
+
 ## Step 1: Build the Server
 
 ```bash
