@@ -192,7 +192,7 @@
   "about": {
     "title": "О MASQUE VPN",
     "version": "Версия {version}",
-    "description": "Веб-интерфейс управления сервером MASQUE VPN. CloudBridge Research Center доработал MASQUE VPN для использования в образовательных инициативах для студентов МЭИ и исследователей сетевых технологий.",
+    "description": "Веб-интерфейс управления сервером MASQUE VPN. CloudBridge Research Center доработал MASQUE VPN для использования в образовательных инициативах для студентов вузов и исследователей сетевых технологий.",
     "organization": "Организация:",
     "organizationName": "CloudBridge Research Center / 2GC Network Protocol Suite",
     "organizationDescription": "Независимый исследовательский центр, специализирующийся на передовых исследованиях распределенных систем и сетевых технологий, образовательных инициативах и создании open-source решений.",

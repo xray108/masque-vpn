@@ -1,6 +1,6 @@
 # Руководство студента: Использование masque-vpn для исследований
 
-Это руководство поможет студентам МЭИ использовать masque-vpn для исследовательских проектов, дипломных работ и лабораторных заданий.
+Это руководство поможет студентам вузов использовать masque-vpn для исследовательских проектов, дипломных работ и лабораторных заданий.
 
 ## Обзор
 
@@ -251,4 +251,4 @@ sudo tc qdisc add dev eth0 root tbf rate 1mbit burst 32kbit latency 400ms
 Для вопросов и сотрудничества:
 - Оригинальный репозиторий: [iselt/masque-vpn](https://github.com/iselt/masque-vpn)
 - CloudBridge Research: [cloudbridge-research.ru](https://cloudbridge-research.ru)
-- Материалы курса МЭИ: [openedu.mpei.ru/course/BAS_2](https://openedu.mpei.ru/course/BAS_2)
+- Материалы курса университета: [openedu.mpei.ru/course/BAS_2](https://openedu.mpei.ru/course/BAS_2)

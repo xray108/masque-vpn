@@ -2,7 +2,7 @@
 
 **Analysis Date:** 2025-11-23  
 **Analyzed Projects:**
-- `МЭИ_LECTURE/` - Educational materials on QUIC/FEC/BBRv3 for UAS
+- `UNIVERSITY_LECTURE/` - Educational materials on QUIC/FEC/BBRv3 for UAS
 - `cloudbridge/quic-test/` - Comprehensive QUIC testing platform
 - `cloudbridge/masque-vpn/` - VPN based on MASQUE CONNECT-IP
 
@@ -86,7 +86,7 @@ Adapt from quic-test/internal/prometheus_export.go. Add metrics:
 ### Priority 2: Performance and Optimization
 
 **Why it's important:**
-- Direct connection with МЭИ_LECTURE materials (BBRv3, FEC)
+- Direct connection with университетских материалов (BBRv3, FEC)
 - Practical application of theoretical knowledge
 - Opportunity for thesis work
 
@@ -98,7 +98,7 @@ Reuse from quic-test/internal/congestion/cc_bbrv3.go. Integrate into QUIC config
 **Estimate:** 2-3 days (integration)  
 **Complexity:** Medium  
 **Educational Value:** High  
-**Connection with МЭИ:** Direct (IMPLEMENTATION_ROADMAP_FOR_UAS.md)
+**Connection with университетом:** Direct (IMPLEMENTATION_ROADMAP_FOR_UAS.md)
 
 #### 2.2 FEC (Forward Error Correction)
 Adapt from quic-test/internal/fec/. Add to masque-vpn:
@@ -109,7 +109,7 @@ Adapt from quic-test/internal/fec/. Add to masque-vpn:
 **Estimate:** 3-4 days  
 **Complexity:** High  
 **Educational Value:** High  
-**Connection with МЭИ:** Critical (theorem 2 in FORMAL_PROOF)
+**Connection with университетом:** Critical (theorem 2 in FORMAL_PROOF)
 
 **Phase 2 Total:** 8-11 days work
 
@@ -180,7 +180,7 @@ Adapt from quic-test/internal/pqc/. Hybrid cryptography: classical + PQC
 
 1. **Prometheus metrics** - critical for research
 2. **Grafana dashboards** - data visualization
-3. **BBRv3 integration** - direct connection with МЭИ materials
+3. **BBRv3 integration** - direct connection with университетских материалов
 4. **Basic FEC implementation** - practical application of theory
 
 ### What can be reused from quic-test
@@ -204,7 +204,7 @@ Adapt from quic-test/internal/pqc/. Hybrid cryptography: classical + PQC
 
 ### After Phase 2 (Optimization)
 - +10-15% performance (BBRv3 + FEC)
-- Practical application of МЭИ materials
+- Practical application of университетских материалов
 - Ready for publications
 
 ### After Phase 3 (Advanced)
@@ -226,7 +226,7 @@ Adapt from quic-test/internal/pqc/. Hybrid cryptography: classical + PQC
 ### Why exactly this?
 
 1. **Maximum educational value** - students get practical experience with modern technologies
-2. **Direct connection with МЭИ materials** - BBRv3 and FEC from lectures
+2. **Direct connection with университетских материалов** - BBRv3 and FEC from lectures
 3. **Quick results** - research can start in 2 weeks
 4. **Code reuse** - much already exists in quic-test
 
