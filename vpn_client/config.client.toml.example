@@ -1,43 +1,43 @@
-# VPN 客户端配置
+# MASQUE VPN Client Configuration
 
-# VPN 服务器地址 (IP:Port)
+# VPN server address (IP:Port)
 server_addr = "127.0.0.1:4433"
 
-# 服务器名称 (用于证书验证和 URI 模板)
+# Server name (used for certificate verification and URI template)
 server_name = "vpn.example.local"
 
-# CA 证书文件路径 (用于验证服务器证书)
+# CA certificate file path (for server certificate verification)
 ca_file = "cert/ca.crt"
-# 或者直接提供 PEM 内容
+# Or provide PEM content directly
 # ca_pem = "-----BEGIN CERTIFICATE-----\n..."
 
-# 客户端证书文件路径 (mTLS)
-cert_file = "cert/client.crt"
-# 或者直接提供 PEM 内容
+# Client certificate file path (mTLS)
+tls_cert = "cert/client.crt"
+# Or provide PEM content directly
 # cert_pem = "-----BEGIN CERTIFICATE-----\n..."
 
-# 客户端私钥文件路径 (mTLS)
-key_file = "cert/client.key"
-# 或者直接提供 PEM 内容
+# Client private key file path (mTLS)
+tls_key = "cert/client.key"
+# Or provide PEM content directly
 # key_pem = "-----BEGIN PRIVATE KEY-----\n..."
 
-# 是否跳过服务器证书验证 (不推荐用于生产环境)
+# Skip server certificate verification (not recommended for production)
 insecure_skip_verify = false
 
-# 可选：TUN 设备名称
+# Optional: TUN device name
 # tun_name = "utun5"
 
-# 可选：TLS 密钥日志文件 (用于 Wireshark 调试)
+# Optional: TLS key log file (for Wireshark debugging)
 # key_log_file = "ssl-key.log"
 
-# 日志级别 (debug, info, warn, error)
-log_level = "info"
+# Logging configuration
+log_level = "info"  # debug, info, warn, error
 
-# MTU 设置
+# Maximum Transmission Unit
 mtu = 1413
 
 # Forward Error Correction (FEC) configuration
 [fec]
 enabled = false
-redundancy_percent = 10  # 10% redundancy
-block_size = 20          # Number of packets per FEC block
+redundancy = 0.1  # 10% redundancy
+block_size = 20   # Number of packets per FEC block

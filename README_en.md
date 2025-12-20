@@ -6,8 +6,6 @@ A VPN implementation based on the MASQUE (CONNECT-IP) protocol using QUIC transp
 
 **⚠️ This project is in early development and is not ready for production use. It is intended for educational purposes and to demonstrate the MASQUE protocol.**
 
-**This project includes a submodule `connect-ip-go`. Please clone the repository with `--recurse-submodules`:**
-
 ```bash
 git clone --recurse-submodules https://github.com/twogc/masque-vpn.git
 ```
@@ -122,7 +120,7 @@ The web interface provides:
 ### Dependencies
 
 - **QUIC**: [quic-go](https://github.com/quic-go/quic-go) - QUIC protocol implementation
-- **MASQUE**: [connect-ip-go](https://github.com/quic-go/connect-ip-go) - MASQUE CONNECT-IP protocol
+- **MASQUE**: Custom implementation of MASQUE CONNECT-IP protocol based on quic-go
 - **Database**: SQLite for client and configuration storage
 - **TUN**: Cross-platform TUN device management
 
@@ -209,7 +207,6 @@ This project is for educational purposes. Contributions are welcome for:
 - [MASQUE Protocol Specification](https://datatracker.ietf.org/doc/draft-ietf-masque-connect-ip/)
 - [QUIC Protocol](https://datatracker.ietf.org/doc/rfc9000/)
 - [quic-go Library](https://github.com/quic-go/quic-go)
-- [connect-ip-go Library](https://github.com/quic-go/connect-ip-go)
 
 ### Standards and RFCs
 
@@ -221,7 +218,7 @@ This project is for educational purposes. Contributions are welcome for:
 This project is built upon the following open-source libraries:
 
 * [quic-go](https://github.com/quic-go/quic-go) - A QUIC implementation in Go
-* [connect-ip-go](https://github.com/quic-go/connect-ip-go) - A Go implementation of the MASQUE CONNECT-IP protocol
+* Custom implementation of MASQUE CONNECT-IP protocol
 
 ## For MPEI Students and Researchers
 

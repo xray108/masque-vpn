@@ -1,0 +1,62 @@
+# Prometheus configuration for MASQUE VPN monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "rules/*.yml"
+
+scrape_configs:
+  # VPN Server metrics
+  - job_name: 'masque-vpn-server'
+    static_configs:
+      - targets: ['vpn-server:9090']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    scheme: http
+
+  # VPN Client metrics
+  - job_name: 'masque-vpn-clients'
+    static_configs:
+      - targets: ['vpn-client-test:9092']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    scheme: http
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node exporter (if available)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Recording rules for performance optimization
+recording_rules:
+  - name: masque_vpn_rules
+    rules:
+      # Connection success rate
+      - record: masque:connection_success_rate
+        expr: rate(vpn_client_connection_status[5m])
+      
+      # Throughput metrics
+      - record: masque:bytes_per_second
+        expr: rate(vpn_client_bytes_sent_total[1m]) + rate(vpn_client_bytes_received_total[1m])
+      
+      # Error rate
+      - record: masque:error_rate
+        expr: rate(vpn_client_errors_total[5m])
+      
+      # Average connection duration
+      - record: masque:avg_connection_duration
+        expr: avg(vpn_client_connection_duration_seconds)

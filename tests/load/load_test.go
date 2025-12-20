@@ -1,81 +1,142 @@
-package main
+package load
 
 import (
-	"flag"
-	"fmt"
-	"io"
-	"log"
-	"net"
+	"context"
+	"net/http"
+	"sync"
+	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func main() {
-	mode := flag.String("mode", "client", "Mode: client or server")
-	addr := flag.String("addr", ":8081", "Address to listen on or connect to")
-	duration := flag.Duration("duration", 10*time.Second, "Test duration (client mode)")
-	flag.Parse()
+func TestMetricsEndpointLoad(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping load test in short mode")
+	}
 
-	if *mode == "server" {
-		runServer(*addr)
+	const (
+		numGoroutines = 10
+		requestsPerGoroutine = 100
+		timeout = 30 * time.Second
+	)
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var successCount, errorCount int
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			
+			for j := 0; j < requestsPerGoroutine; j++ {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
+				resp, err := client.Get("http://localhost:9092/metrics")
+				
+				mu.Lock()
+				if err != nil || resp.StatusCode != http.StatusOK {
+					errorCount++
+				} else {
+					successCount++
+				}
+				mu.Unlock()
+				
+				if resp != nil {
+					resp.Body.Close()
+				}
+				
+				// Small delay to avoid overwhelming
+				time.Sleep(10 * time.Millisecond)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	t.Logf("Load test results: %d successful, %d errors", successCount, errorCount)
+	
+	// Allow some errors but most requests should succeed
+	totalRequests := numGoroutines * requestsPerGoroutine
+	successRate := float64(successCount) / float64(totalRequests)
+	
+	if successCount > 0 {
+		assert.Greater(t, successRate, 0.8, "Success rate should be > 80%")
 	} else {
-		runClient(*addr, *duration)
+		t.Skip("No successful requests - service may not be running")
 	}
 }
 
-func runServer(addr string) {
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+func TestConcurrentConnections(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping load test in short mode")
 	}
-	log.Printf("Load test server listening on %s", addr)
 
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			log.Printf("Accept error: %v", err)
-			continue
+	const numConnections = 50
+	
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var successCount int
+
+	for i := 0; i < numConnections; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			
+			client := &http.Client{Timeout: 10 * time.Second}
+			resp, err := client.Get("http://localhost:9092/health")
+			
+			mu.Lock()
+			if err == nil && resp.StatusCode == http.StatusOK {
+				successCount++
+			}
+			mu.Unlock()
+			
+			if resp != nil {
+				resp.Body.Close()
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	t.Logf("Concurrent connections test: %d/%d successful", successCount, numConnections)
+	
+	if successCount > 0 {
+		successRate := float64(successCount) / float64(numConnections)
+		assert.Greater(t, successRate, 0.7, "Success rate should be > 70%")
+	} else {
+		t.Skip("No successful connections - service may not be running")
+	}
+}
+
+func BenchmarkMetricsEndpoint(b *testing.B) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	
+	// Test if endpoint is available
+	resp, err := client.Get("http://localhost:9092/metrics")
+	if err != nil {
+		b.Skip("Metrics endpoint not available")
+		return
+	}
+	resp.Body.Close()
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			resp, err := client.Get("http://localhost:9092/metrics")
+			if err == nil && resp != nil {
+				resp.Body.Close()
+			}
 		}
-		go handleConnection(conn)
-	}
-}
-
-func handleConnection(conn net.Conn) {
-	defer conn.Close()
-	// Discard all data
-	n, err := io.Copy(io.Discard, conn)
-	if err != nil {
-		log.Printf("Connection error: %v", err)
-	}
-	log.Printf("Received %d bytes from %s", n, conn.RemoteAddr())
-}
-
-func runClient(addr string, duration time.Duration) {
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		log.Fatalf("Failed to connect: %v", err)
-	}
-	defer conn.Close()
-
-	log.Printf("Connected to %s, sending data for %v...", addr, duration)
-
-	start := time.Now()
-	deadline := start.Add(duration)
-	buf := make([]byte, 32*1024) // 32KB buffer
-	var totalBytes int64
-
-	for time.Now().Before(deadline) {
-		n, err := conn.Write(buf)
-		if err != nil {
-			log.Fatalf("Write error: %v", err)
-		}
-		totalBytes += int64(n)
-	}
-
-	elapsed := time.Since(start)
-	mbps := (float64(totalBytes) * 8 / 1000 / 1000) / elapsed.Seconds()
-
-	fmt.Printf("Test complete:\n")
-	fmt.Printf("  Duration: %v\n", elapsed)
-	fmt.Printf("  Total Data: %d bytes (%.2f MB)\n", totalBytes, float64(totalBytes)/1024/1024)
-	fmt.Printf("  Throughput: %.2f Mbps\n", mbps)
+	})
 }

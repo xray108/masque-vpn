@@ -1,22 +1,54 @@
+# MASQUE VPN Server Configuration
+
+# Network configuration
+listen_addr = "0.0.0.0:4433"
+assign_cidr = "10.0.0.0/24"
+advertise_routes = [
+  "0.0.0.0/0",
   "10.99.0.0/24"
 ]
 
-# 可选：TUN 设备名称，如果为空则系统自动分配
+# IPv6 support (optional)
+# assign_cidr_v6 = "fd00::/64"
+# advertise_routes_v6 = ["::/0"]
+
+# TLS certificates
+cert_file = "cert/server.crt"
+key_file = "cert/server.key"
+ca_cert_file = "cert/ca.crt"
+ca_key_file = "cert/ca.key"
+
+# Optional: Embedded PEM certificates (alternative to files)
+# cert_pem = ""
+# key_pem = ""
+# ca_cert_pem = ""
+# ca_key_pem = ""
+
+# Optional: TUN device name, if empty system will auto-assign
 # tun_name = "vpntun0"
 
-# 日志级别
-log_level = "info"
+# Logging configuration
+log_level = "info"  # debug, info, warn, error
 
-# 服务器名称（客户端使用它来验证服务器和URI模板）
+# Server name (used by clients for TLS verification and URI template)
 server_name = "vpn.example.local"
 
+# Maximum Transmission Unit
 mtu = 1413
 
+# API server configuration
 [api_server]
 listen_addr = "0.0.0.0:8080"
 static_dir = "../admin_webui/dist"
 database_path = "masque_admin.db"
 
+# Metrics configuration
 [metrics]
 enabled = true
 listen_addr = "0.0.0.0:9090"
+
+# Forward Error Correction configuration
+[fec]
+enabled = false
+redundancy = 0.2  # 20% redundancy
+block_size = 10   # packets per block

@@ -4,9 +4,7 @@ import (
 	common_fec "github.com/iselt/masque-vpn/common/fec"
 )
 
-// ClientConfig 结构体，用于存储从 TOML 文件加载的客户端配置信息
-// 可供 vpn_client/main.go 使用
-//
+// ClientConfig структура для хранения конфигурации клиента из TOML файла
 type ClientConfig struct {
 	ServerAddr         string `toml:"server_addr"`
 	ServerName         string `toml:"server_name"`
@@ -19,8 +17,9 @@ type ClientConfig struct {
 	InsecureSkipVerify bool   `toml:"insecure_skip_verify"`
 	TunName            string `toml:"tun_name"`
 	KeyLogFile         string `toml:"key_log_file"`
-	LogLevel           string    `toml:"log_level"`
-	MTU                int       `toml:"mtu"`
+	LogLevel           string `toml:"log_level"`
+	MTU                int    `toml:"mtu"`
+	PreferIPv6         bool   `toml:"prefer_ipv6"`
 	FEC                common_fec.Config `toml:"fec"`
 }
 
@@ -31,9 +30,7 @@ type APIServerConfig struct {
 	DatabasePath string `toml:"database_path"`
 }
 
-// ServerConfig 结构体，用于存储从 TOML 文件加载的服务端配置信息
-// 可供 vpn_server/main.go 使用
-//
+// ServerConfig структура для хранения конфигурации сервера из TOML файла
 type ServerConfig struct {
 	ListenAddr      string   `toml:"listen_addr"`
 	CertFile        string   `toml:"cert_file"`
@@ -45,13 +42,16 @@ type ServerConfig struct {
 	CAKeyPEM        string   `toml:"ca_key_pem"`
 	CACertPEM       string   `toml:"ca_cert_pem"`
 	AssignCIDR      string   `toml:"assign_cidr"`
+	AssignCIDRv6    string   `toml:"assign_cidr_v6"`
 	AdvertiseRoutes []string `toml:"advertise_routes"`
+	AdvertiseRoutesv6 []string `toml:"advertise_routes_v6"`
 	TunName         string   `toml:"tun_name"`
 	LogLevel        string   `toml:"log_level"`
 	ServerName      string   `toml:"server_name"`
 	MTU             int      `toml:"mtu"`
+	EnableIPv6      bool     `toml:"enable_ipv6"`
 
-	// 修改：使用嵌套结构体来映射 [api_server] 表
+	// API server configuration
 	APIServer APIServerConfig `toml:"api_server"`
 
 	// Metrics configuration

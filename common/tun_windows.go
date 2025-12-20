@@ -1,99 +1,66 @@
 //go:build windows
-// +build windows
 
 package common
 
 import (
 	"fmt"
 	"log"
-	"net/netip"
-
-	"golang.zx2c4.com/wireguard/tun"
-	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"
+	"net"
+	"os/exec"
 )
 
-// TUNDevice 是TUN设备的实现，提供读写功能
-type TUNDevice struct {
-	device    tun.Device
-	nativeTun *tun.NativeTun // 保存原始设备引用
-	name      string
-	ipAddress netip.Addr    // IP地址
-	index     int           // 接口索引（Linux使用）
-	luid      winipcfg.LUID // LUID（Windows使用）
+const (
+	// TunPacketOffset is the offset required by WireGuard TUN on Windows
+	TunPacketOffset = 0
+)
+
+// getDefaultPlatformTunName returns the default TUN name for Windows
+func getDefaultPlatformTunName() string {
+	return "wintun"
 }
 
-// LUID 返回Windows网络接口的LUID
-func (t *TUNDevice) LUID() uint64 {
-	return uint64(t.luid)
-}
-
-// SetIP 设置TUN设备的IP地址
-func (t *TUNDevice) SetIP(ipPrefix netip.Prefix) error {
-	err := t.luid.SetIPAddresses([]netip.Prefix{ipPrefix})
-	if err != nil {
-		return fmt.Errorf("failed to set IP address: %v", err)
+// setPlatformIP sets the IP address on Windows
+func setPlatformIP(tunDev *TUNDevice, ipNet net.IPNet) error {
+	ip := ipNet.IP.String()
+	mask, _ := ipNet.Mask.Size()
+	
+	// Convert CIDR to netmask
+	netmask := cidrToNetmask(mask)
+	
+	// Use netsh command on Windows
+	cmd := exec.Command("netsh", "interface", "ip", "set", "address", 
+		"name="+tunDev.Name(), "static", ip, netmask)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to set IP address: %v, output: %s", err, string(output))
 	}
-	t.ipAddress = ipPrefix.Addr()
-	log.Printf("Assigned IP %s to TUN device %s", ipPrefix, t.name)
+
+	log.Printf("Set IP address %s/%d on interface %s", ip, mask, tunDev.Name())
 	return nil
 }
 
-// AddRoute 通过TUN设备添加路由
-func (t *TUNDevice) AddRoute(prefix netip.Prefix) error {
-	nextHop := t.ipAddress
-	metric := uint32(1)
+// addPlatformRoute adds a route on Windows
+func addPlatformRoute(tunDev *TUNDevice, ipNet net.IPNet) error {
+	network := ipNet.String()
 
-	err := t.luid.AddRoute(prefix, nextHop, metric)
-	if err != nil {
-		return fmt.Errorf("failed to add route: %v", err)
+	// Use route command on Windows
+	cmd := exec.Command("route", "add", network, "0.0.0.0", "if", tunDev.Name())
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to add route: %v, output: %s", err, string(output))
 	}
 
 	return nil
 }
 
-// CreateTunDevice 在Windows上创建和配置TUN设备
-func CreateTunDevice(name string, ipPrefix netip.Prefix, mtu int) (*TUNDevice, error) {
-	// 如果名称为空，则使用默认名称
-	if name == "" {
-		name = "masquetun"
+// cidrToNetmask converts CIDR prefix length to netmask (e.g., 24 -> 255.255.255.0)
+func cidrToNetmask(cidr int) string {
+	if cidr < 0 || cidr > 32 {
+		return "255.255.255.0" // default
 	}
-
-	// 创建WireGuard TUN设备
-	device, err := tun.CreateTUN(name, mtu)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create TUN device: %v", err)
-	}
-
-	// 获取接口名称
-	tunName, err := device.Name()
-	if err != nil {
-		device.Close()
-		return nil, fmt.Errorf("failed to get TUN device name: %v", err)
-	}
-	log.Printf("Created TUN device: %s", tunName)
-
-	// 获取原生TUN设备
-	nativeTunDevice, ok := device.(*tun.NativeTun)
-	if !ok {
-		device.Close()
-		return nil, fmt.Errorf("failed to get native TUN device")
-	}
-
-	luid := winipcfg.LUID(nativeTunDevice.LUID())
-
-	// 创建设备结构
-	tunDevice := &TUNDevice{
-		device:    device,
-		nativeTun: nativeTunDevice,
-		name:      tunName,
-		luid:      luid,
-	}
-
-	// 配置IP地址
-	if err := tunDevice.SetIP(ipPrefix); err != nil {
-		device.Close()
-		return nil, fmt.Errorf("failed to configure TUN device IP: %v", err)
-	}
-
-	return tunDevice, nil
+	
+	mask := uint32((0xFFFFFFFF << (32 - cidr)) & 0xFFFFFFFF)
+	return fmt.Sprintf("%d.%d.%d.%d",
+		byte(mask>>24),
+		byte(mask>>16),
+		byte(mask>>8),
+		byte(mask))
 }

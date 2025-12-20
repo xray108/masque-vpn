@@ -6,8 +6,6 @@
 
 **⚠️ 本项目处于早期开发阶段，暂不适合生产环境使用，仅供学习和 MASQUE 协议演示用途。**
 
-**本项目包含了一个子模块 `iselt/connect-ip-go`, 请使用 `--recurse-submodules` 克隆项目：`git clone --recurse-submodules https://github.com/iselt/masque-vpn.git`**
-
 ## 特性
 
 - **现代协议**: 基于 QUIC 和 MASQUE CONNECT-IP 构建
@@ -112,7 +110,7 @@ Web 界面提供：
 ### 依赖项
 
 - **QUIC**: [quic-go](https://github.com/quic-go/quic-go) - QUIC 协议实现
-- **MASQUE**: [connect-ip-go](https://github.com/quic-go/connect-ip-go) - MASQUE CONNECT-IP 协议
+- **MASQUE**: 基于 quic-go 的自定义 MASQUE CONNECT-IP 协议实现
 - **数据库**: SQLite 用于客户端和配置存储
 - **TUN**: 跨平台 TUN 设备管理
 
@@ -165,4 +163,3 @@ masque-vpn/
 - [MASQUE 协议规范](https://datatracker.ietf.org/doc/draft-ietf-masque-connect-ip/)
 - [QUIC 协议](https://datatracker.ietf.org/doc/rfc9000/)
 - [quic-go 库](https://github.com/quic-go/quic-go)
-- [connect-ip-go 库](https://github.com/quic-go/connect-ip-go)

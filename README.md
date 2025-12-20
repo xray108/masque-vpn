@@ -6,8 +6,6 @@ VPN-реализация на основе протокола MASQUE (CONNECT-IP
 
 **⚠️ Этот проект находится на ранней стадии разработки и не готов для использования в продакшене. Он предназначен для образовательных целей и демонстрации протокола MASQUE.**
 
-**Этот проект включает подмодуль `connect-ip-go`. Пожалуйста, клонируйте репозиторий с флагом `--recurse-submodules`:**
-
 ```bash
 git clone --recurse-submodules https://github.com/twogc/masque-vpn.git
 ```
@@ -135,7 +133,7 @@ sudo ./vpn-client
 ### Зависимости
 
 - **QUIC**: [quic-go](https://github.com/quic-go/quic-go) - реализация протокола QUIC
-- **MASQUE**: [connect-ip-go](https://github.com/quic-go/connect-ip-go) - протокол MASQUE CONNECT-IP
+- **MASQUE**: Собственная реализация протокола MASQUE CONNECT-IP на основе quic-go
 - **База данных**: SQLite для хранения клиентов и конфигурации
 - **TUN**: Кроссплатформенное управление TUN-устройствами
 
@@ -229,7 +227,6 @@ Offset указывает, с какой позиции в буфере начи
 - [Спецификация протокола MASQUE](https://datatracker.ietf.org/doc/draft-ietf-masque-connect-ip/)
 - [Протокол QUIC](https://datatracker.ietf.org/doc/rfc9000/)
 - [Библиотека quic-go](https://github.com/quic-go/quic-go)
-- [Библиотека connect-ip-go](https://github.com/quic-go/connect-ip-go)
 
 ### Стандарты и RFC
 
@@ -241,7 +238,7 @@ Offset указывает, с какой позиции в буфере начи
 Этот проект построен на следующих библиотеках с открытым исходным кодом:
 
 * [quic-go](https://github.com/quic-go/quic-go) - Реализация QUIC на Go
-* [connect-ip-go](https://github.com/quic-go/connect-ip-go) - Реализация протокола MASQUE CONNECT-IP на Go
+* Собственная реализация протокола MASQUE CONNECT-IP
 
 ## Для студентов и исследователей вузов
 

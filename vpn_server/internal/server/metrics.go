@@ -1,205 +1,157 @@
 package server
 
 import (
-	"net/http"
-	"sync"
-	"time"
-
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Metrics holds all Prometheus metrics
+// Metrics содержит все метрики сервера
 type Metrics struct {
-	activeConnections    prometheus.Gauge
-	connectionsTotal     *prometheus.CounterVec
-	bytesSentTotal      *prometheus.CounterVec
-	bytesReceivedTotal  *prometheus.CounterVec
-	packetsSentTotal    *prometheus.CounterVec
-	packetsReceivedTotal *prometheus.CounterVec
-	latency             *prometheus.HistogramVec
-	rtt                 *prometheus.GaugeVec
-	throughput          *prometheus.GaugeVec
-	packetLoss          *prometheus.GaugeVec
-	ipPoolUsage         prometheus.Gauge
-	ipPoolAvailable     prometheus.Gauge
-	ipPoolTotal         prometheus.Gauge
-	connectionDuration  *prometheus.HistogramVec
-	errorsTotal         *prometheus.CounterVec
+	// Счетчики соединений
+	ActiveConnections prometheus.Gauge
+	TotalConnections  prometheus.Counter
+	
+	// Счетчики пакетов
+	PacketsForwarded prometheus.Counter
+	PacketsDropped   prometheus.Counter
+	BytesForwarded   prometheus.Counter
+	
+	// Метрики производительности
+	PacketProcessingDuration prometheus.Histogram
+	ConnectionDuration       prometheus.Histogram
+	
+	// Метрики ошибок
+	ErrorsTotal *prometheus.CounterVec
+	
+	// Метрики FEC
+	FECPacketsEncoded prometheus.Counter
+	FECPacketsDecoded prometheus.Counter
+	FECRecoveredPackets prometheus.Counter
+	
+	// Метрики TUN устройства
+	TunInterfaceStatus prometheus.Gauge
+	TunPacketsRead     prometheus.Counter
+	TunPacketsWritten  prometheus.Counter
 }
 
-var (
-	metricsInstance *Metrics
-	metricsOnce     sync.Once
-)
-
-// NewMetrics creates a new Metrics instance
+// NewMetrics создает новый экземпляр метрик
 func NewMetrics() *Metrics {
-	metricsOnce.Do(func() {
-		metricsInstance = &Metrics{
-			activeConnections: prometheus.NewGauge(prometheus.GaugeOpts{
-				Name: "masque_vpn_active_connections_total",
-				Help: "Current number of active VPN connections",
-			}),
-			connectionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: "masque_vpn_connections_total",
-				Help: "Total number of connections established since startup",
-			}, []string{"status"}),
-			bytesSentTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: "masque_vpn_bytes_sent_total",
-				Help: "Total bytes sent to clients",
-			}, []string{"client_id"}),
-			bytesReceivedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: "masque_vpn_bytes_received_total",
-				Help: "Total bytes received from clients",
-			}, []string{"client_id"}),
-			packetsSentTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: "masque_vpn_packets_sent_total",
-				Help: "Total packets sent to clients",
-			}, []string{"client_id"}),
-			packetsReceivedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: "masque_vpn_packets_received_total",
-				Help: "Total packets received from clients",
-			}, []string{"client_id"}),
-			latency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:    "masque_vpn_latency_ms",
-				Help:    "Connection latency in milliseconds",
-				Buckets: prometheus.ExponentialBuckets(1, 2, 10),
-			}, []string{"client_id"}),
-			rtt: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-				Name: "masque_vpn_rtt_ms",
-				Help: "Round-trip time in milliseconds",
-			}, []string{"client_id"}),
-			throughput: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-				Name: "masque_vpn_throughput_mbps",
-				Help: "Current throughput in Mbps",
-			}, []string{"client_id", "direction"}),
-			packetLoss: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-				Name: "masque_vpn_packet_loss_percent",
-				Help: "Packet loss percentage",
-			}, []string{"client_id"}),
-			ipPoolUsage: prometheus.NewGauge(prometheus.GaugeOpts{
-				Name: "masque_vpn_ip_pool_usage_percent",
-				Help: "Percentage of IP pool addresses in use",
-			}),
-			ipPoolAvailable: prometheus.NewGauge(prometheus.GaugeOpts{
-				Name: "masque_vpn_ip_pool_available",
-				Help: "Number of available IP addresses in pool",
-			}),
-			ipPoolTotal: prometheus.NewGauge(prometheus.GaugeOpts{
-				Name: "masque_vpn_ip_pool_total",
-				Help: "Total number of IP addresses in pool",
-			}),
-			connectionDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:    "masque_vpn_connection_duration_seconds",
-				Help:    "Duration of connections in seconds",
-				Buckets: prometheus.ExponentialBuckets(1, 2, 15),
-			}, []string{"client_id"}),
-			errorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Name: "masque_vpn_errors_total",
-				Help: "Total number of errors",
-			}, []string{"type"}),
-		}
-
-		prometheus.MustRegister(
-			metricsInstance.activeConnections,
-			metricsInstance.connectionsTotal,
-			metricsInstance.bytesSentTotal,
-			metricsInstance.bytesReceivedTotal,
-			metricsInstance.packetsSentTotal,
-			metricsInstance.packetsReceivedTotal,
-			metricsInstance.latency,
-			metricsInstance.rtt,
-			metricsInstance.throughput,
-			metricsInstance.packetLoss,
-			metricsInstance.ipPoolUsage,
-			metricsInstance.ipPoolAvailable,
-			metricsInstance.ipPoolTotal,
-			metricsInstance.connectionDuration,
-			metricsInstance.errorsTotal,
-		)
-	})
-
-	return metricsInstance
-}
-
-// StartMetricsServer starts the Prometheus metrics HTTP server
-func StartMetricsServer(addr string) error {
-	http.Handle("/metrics", promhttp.Handler())
-	return http.ListenAndServe(addr, nil)
-}
-
-// ClientMetrics tracks metrics for a single client connection
-type ClientMetrics struct {
-	clientID       string
-	startTime      time.Time
-	bytesSent      uint64
-	bytesReceived  uint64
-	packetsSent    uint64
-	packetsReceived uint64
-	lastUpdate     time.Time
-	mu             sync.RWMutex
-}
-
-// NewClientMetrics creates a new ClientMetrics instance
-func NewClientMetrics(clientID string) *ClientMetrics {
-	return &ClientMetrics{
-		clientID:   clientID,
-		startTime:  time.Now(),
-		lastUpdate: time.Now(),
+	metrics := &Metrics{
+		ActiveConnections: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "vpn_server_active_connections",
+			Help: "Number of active VPN connections",
+		}),
+		
+		TotalConnections: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "vpn_server_total_connections",
+			Help: "Total number of VPN connections established",
+		}),
+		
+		PacketsForwarded: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "vpn_server_packets_forwarded_total",
+			Help: "Total number of packets forwarded",
+		}),
+		
+		PacketsDropped: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "vpn_server_packets_dropped_total",
+			Help: "Total number of packets dropped",
+		}),
+		
+		BytesForwarded: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "vpn_server_bytes_forwarded_total",
+			Help: "Total bytes forwarded",
+		}),
+		
+		PacketProcessingDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name: "vpn_server_packet_processing_duration_seconds",
+			Help: "Time spent processing packets",
+			Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1},
+		}),
+		
+		ConnectionDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name: "vpn_server_connection_duration_seconds",
+			Help: "Duration of VPN connections",
+			Buckets: prometheus.DefBuckets,
+		}),
+		
+		ErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "vpn_server_errors_total",
+			Help: "Total number of errors by type",
+		}, []string{"error_type"}),
+		
+		FECPacketsEncoded: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "vpn_server_fec_packets_encoded_total",
+			Help: "Total number of FEC encoded packets",
+		}),
+		
+		FECPacketsDecoded: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "vpn_server_fec_packets_decoded_total",
+			Help: "Total number of FEC decoded packets",
+		}),
+		
+		FECRecoveredPackets: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "vpn_server_fec_recovered_packets_total",
+			Help: "Total number of packets recovered using FEC",
+		}),
+		
+		TunInterfaceStatus: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "vpn_server_tun_interface_status",
+			Help: "TUN interface status (1 = up, 0 = down)",
+		}),
+		
+		TunPacketsRead: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "vpn_server_tun_packets_read_total",
+			Help: "Total packets read from TUN interface",
+		}),
+		
+		TunPacketsWritten: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "vpn_server_tun_packets_written_total",
+			Help: "Total packets written to TUN interface",
+		}),
 	}
+	
+	// Регистрируем все метрики
+	prometheus.MustRegister(
+		metrics.ActiveConnections,
+		metrics.TotalConnections,
+		metrics.PacketsForwarded,
+		metrics.PacketsDropped,
+		metrics.BytesForwarded,
+		metrics.PacketProcessingDuration,
+		metrics.ConnectionDuration,
+		metrics.ErrorsTotal,
+		metrics.FECPacketsEncoded,
+		metrics.FECPacketsDecoded,
+		metrics.FECRecoveredPackets,
+		metrics.TunInterfaceStatus,
+		metrics.TunPacketsRead,
+		metrics.TunPacketsWritten,
+	)
+	
+	return metrics
 }
 
-// RecordBytesSent records bytes sent to the client
-func (cm *ClientMetrics) RecordBytesSent(bytes uint64) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-	cm.bytesSent += bytes
-	cm.packetsSent++
-	metricsInstance.bytesSentTotal.WithLabelValues(cm.clientID).Add(float64(bytes))
-	metricsInstance.packetsSentTotal.WithLabelValues(cm.clientID).Inc()
+// RecordConnection записывает метрики нового соединения
+func (m *Metrics) RecordConnection() {
+	m.TotalConnections.Inc()
+	m.ActiveConnections.Inc()
 }
 
-// RecordBytesReceived records bytes received from the client
-func (cm *ClientMetrics) RecordBytesReceived(bytes uint64) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
-	cm.bytesReceived += bytes
-	cm.packetsReceived++
-	metricsInstance.bytesReceivedTotal.WithLabelValues(cm.clientID).Add(float64(bytes))
-	metricsInstance.packetsReceivedTotal.WithLabelValues(cm.clientID).Inc()
+// RecordDisconnection записывает метрики закрытого соединения
+func (m *Metrics) RecordDisconnection() {
+	m.ActiveConnections.Dec()
 }
 
-// RecordLatency records connection latency
-func (cm *ClientMetrics) RecordLatency(latencyMs float64) {
-	metricsInstance.latency.WithLabelValues(cm.clientID).Observe(latencyMs)
+// RecordError записывает метрику ошибки
+func (m *Metrics) RecordError(errorType string) {
+	m.ErrorsTotal.WithLabelValues(errorType).Inc()
 }
 
-// RecordRTT records round-trip time
-func (cm *ClientMetrics) RecordRTT(rttMs float64) {
-	metricsInstance.rtt.WithLabelValues(cm.clientID).Set(rttMs)
+// RecordPacketProcessing записывает время обработки пакета
+func (m *Metrics) RecordPacketProcessing(duration float64) {
+	m.PacketProcessingDuration.Observe(duration)
 }
 
-// RecordThroughput records throughput
-func (cm *ClientMetrics) RecordThroughput(mbps float64, direction string) {
-	metricsInstance.throughput.WithLabelValues(cm.clientID, direction).Set(mbps)
+// RecordConnectionDuration записывает продолжительность соединения
+func (m *Metrics) RecordConnectionDuration(duration float64) {
+	m.ConnectionDuration.Observe(duration)
 }
-
-// RecordPacketLoss records packet loss percentage
-func (cm *ClientMetrics) RecordPacketLoss(percent float64) {
-	metricsInstance.packetLoss.WithLabelValues(cm.clientID).Set(percent)
-}
-
-// Close records connection duration and cleans up
-func (cm *ClientMetrics) Close() {
-	duration := time.Since(cm.startTime).Seconds()
-	metricsInstance.connectionDuration.WithLabelValues(cm.clientID).Observe(duration)
-}
-
-// GetStats returns current statistics
-func (cm *ClientMetrics) GetStats() (bytesSent, bytesReceived, packetsSent, packetsReceived uint64) {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
-	return cm.bytesSent, cm.bytesReceived, cm.packetsSent, cm.packetsReceived
-}
-
