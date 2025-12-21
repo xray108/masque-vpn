@@ -4,6 +4,11 @@
 
 **本项目专为教育目的和现代网络协议研究而设计。**
 
+## 其他语言
+
+- [Русская документация](README.md) - 俄语文档
+- [English Documentation](README_en.md) - 英语文档
+
 ```bash
 git clone https://github.com/cloudbridge-research/masque-vpn.git
 ```
@@ -235,8 +240,3 @@ cd tests/load && go test -v
 - 原始仓库: [iselt/masque-vpn](https://github.com/iselt/masque-vpn)
 - GitHub 讨论和问题
 - 欢迎教育机构分叉和适配
-
-## 其他语言
-
-- [Русская документация](README.md) - 俄语文档
-- [English Documentation](README_en.md) - 英语文档

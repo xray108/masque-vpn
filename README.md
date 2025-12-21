@@ -4,6 +4,11 @@
 
 **Этот проект предназначен для образовательных целей и исследований в области современных сетевых протоколов.**
 
+## Документация на других языках
+
+- [English](README_en.md) - English documentation
+- [中文文档](README_zh.md) - Chinese documentation
+
 ```bash
 git clone https://github.com/cloudbridge-research/masque-vpn.git
 ```
@@ -325,8 +330,3 @@ curl http://127.0.0.1:8080/api/v1/logs
 - Оригинальный репозиторий: [iselt/masque-vpn](https://github.com/iselt/masque-vpn)
 - Обсуждения и вопросы на GitHub
 - Образовательные учреждения могут форкать и адаптировать проект
-
-## Документация на других языках
-
-- [English](README_en.md) - English documentation
-- [中文文档](README_zh.md) - Chinese documentation
