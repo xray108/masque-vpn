@@ -1,21 +1,31 @@
 # Getting Started
 
-This guide explains how to build and run the masque-vpn server.
+This guide explains how to build and run the masque-vpn server for educational and research purposes.
 
 ## Prerequisites
 
-- Go 1.24.2 or later
+- Go 1.25 or later
 - OpenSSL (for certificate generation)
 - Linux, macOS, or Windows
+- Administrative privileges (for TUN device creation)
 
 ## Project Structure
 
 For developers interested in the codebase:
 
-- `vpn_server/`: Server entry point (`main.go`).
-- `vpn_server/internal/server/`: Core server logic, API, and metrics.
-- `vpn_client/`: Client implementation.
-- `common/`: Shared utilities and libraries.
+- `vpn_server/`: Server entry point (`main.go`) and modular server implementation.
+- `vpn_server/internal/server/`: Core server logic split into modules:
+  - `server.go`: Main server and initialization
+  - `api_server.go`: REST API server for management
+  - `masque_handler.go`: MASQUE CONNECT-IP request handler
+  - `packet_processor.go`: TUN device packet processing
+  - `metrics.go`: Prometheus metrics
+  - `tls_config.go`: TLS configuration
+- `vpn_client/`: Client implementation with MASQUE CONNECT-IP support.
+- `common/`: Shared utilities and custom MASQUE implementation:
+  - `masque_connectip.go`: Custom MASQUE CONNECT-IP client
+  - `masque_proxy.go`: IP packet tunneling functions
+  - `errors.go`: Centralized error handling system
 
 ## Step 1: Build the Server
 
@@ -26,18 +36,25 @@ go build -o vpn-server .
 
 This will create a `vpn-server` executable in the `vpn_server` directory.
 
-## Step 2: Generate Certificates
+## Step 2: Build the Client
+
+```bash
+cd vpn_client
+go build -o vpn-client .
+```
+
+## Step 3: Generate Certificates
 
 Before starting the server, you need to generate TLS certificates:
 
 ```bash
-cd vpn_server/cert
+cd cert
 
-# Generate CA certificate
-sh gen_ca.sh
+# For Linux/macOS
+./generate-test-certs.sh
 
-# Generate server certificate
-sh gen_server_keypair.sh
+# For Windows
+powershell -ExecutionPolicy Bypass -File generate-certs.ps1
 ```
 
 This will create the following files in the `cert/` directory:
@@ -45,100 +62,153 @@ This will create the following files in the `cert/` directory:
 - `ca.key` - CA private key
 - `server.crt` - Server certificate
 - `server.key` - Server private key
+- `client.crt` - Client certificate
+- `client.key` - Client private key
 
-## Step 3: Configure the Server
+## Step 4: Configure the Server
 
-Copy the example configuration file:
+Use the provided local configuration:
 
 ```bash
 cd vpn_server
-cp config.server.toml.example config.server.toml
+# Use config.server.local.toml for local testing
 ```
 
-Edit `config.server.toml` and adjust the following settings:
+Key configuration settings in `config.server.local.toml`:
 
-- `listen_addr` - Server listening address (default: `0.0.0.0:4433`)
-- `server_name` - Server name for TLS verification
-- `assign_cidr` - IP range for VPN clients (default: `10.99.0.0/24`)
-- `advertise_routes` - Routes to advertise to clients
+- `listen_addr = "127.0.0.1:4433"` - Server listening address
+- `assign_cidr = "10.0.0.0/24"` - IP range for VPN clients
+- `tun_name = ""` - TUN device disabled for local testing
+- `api_server.listen_addr = "127.0.0.1:8080"` - API server address
+
+### API Server Configuration
+
+The API server is configured in the `[api_server]` section:
+
+```toml
+[api_server]
+listen_addr = "127.0.0.1:8080"
+static_dir = "../admin_webui/dist"
+database_path = "masque_admin.db"
+```
 
 ### Metrics Configuration
 
-The metrics section is already configured in the example:
+Metrics are configured in the `[metrics]` section:
 
 ```toml
 [metrics]
 enabled = true
-listen_addr = "0.0.0.0:9090"
+listen_addr = "127.0.0.1:9090"
 ```
 
-If you want to disable metrics, set `enabled = false`.
+## Step 5: Start the Server
 
-## Step 4: Start the Server
-
-### Using the default configuration file:
+### Using the local configuration:
 
 ```bash
 cd vpn_server
-./vpn-server
+./vpn-server -c config.server.local.toml
 ```
 
-### Using a custom configuration file:
-
-```bash
-cd vpn_server
-./vpn-server -c /path/to/config.server.toml
-```
-
-## Step 5: Verify the Server is Running
+## Step 6: Verify the Server is Running
 
 The server will start several services:
 
-1. **VPN Server** - Listens on the address specified in `listen_addr` (default: `0.0.0.0:4433`)
-2. **Web Management UI** - Available at `http://localhost:8080` (default credentials: `admin` / `admin`)
-3. **Prometheus Metrics** - Available at `http://localhost:9090/metrics` (if enabled)
+1. **MASQUE VPN Server** - Listens on `127.0.0.1:4433`
+2. **REST API Server** - Available at `http://127.0.0.1:8080`
+3. **Prometheus Metrics** - Available at `http://127.0.0.1:8080/metrics`
 
 ### Check Server Logs
 
 You should see output like:
 
 ```
-Starting VPN Server...
-Listen Address: 0.0.0.0:4433
-VPN Network: 10.99.0.0/24
-Gateway IP: 10.99.0.1
-Metrics enabled, will be available at 0.0.0.0:9090/metrics
-QUIC Listener started on 0.0.0.0:4433
-Starting HTTP/3 server...
+2025-12-21T03:57:31.297+0300    INFO    Starting MASQUE VPN Server
+2025/12/21 03:57:31 TUN device disabled (empty tun_name)
+2025/12/21 03:57:31 MASQUE VPN Server listening on 127.0.0.1:4433
+2025/12/21 03:57:31 API Server will start on 127.0.0.1:8080
 ```
 
-### Verify Metrics Endpoint
+### Verify API Endpoints
 
-If metrics are enabled, you can check them:
+Check health status:
+```bash
+curl http://127.0.0.1:8080/health
+```
+
+Check server status:
+```bash
+curl http://127.0.0.1:8080/api/v1/status
+```
+
+Check metrics:
+```bash
+curl http://127.0.0.1:8080/metrics
+```
+
+## Step 7: Configure and Start the Client
+
+Configure the client for local testing:
 
 ```bash
-curl http://localhost:9090/metrics
+cd vpn_client
+# Edit config.client.toml to use server_addr = "127.0.0.1:4433"
 ```
 
-You should see Prometheus metrics in text format.
+Start the client:
+
+```bash
+./vpn-client -c config.client.toml
+```
+
+## Testing the Connection
+
+### Basic Connection Test
+
+Run the included connection test:
+
+```bash
+go run test_masque_connection.go
+```
+
+This will test basic MASQUE protocol functionality without requiring TUN devices.
+
+### API Testing
+
+Check connected clients:
+```bash
+curl http://127.0.0.1:8080/api/v1/clients
+```
+
+View server statistics:
+```bash
+curl http://127.0.0.1:8080/api/v1/stats
+```
 
 ## Troubleshooting
 
-### Permission Errors (Linux)
+### Permission Errors
 
-If you get permission errors when creating the TUN device, run with sudo:
+If you get permission errors when creating TUN devices:
 
 ```bash
-sudo ./vpn-server
+# Linux/macOS
+sudo ./vpn-server -c config.server.local.toml
+sudo ./vpn-client -c config.client.toml
+
+# Windows (run as Administrator)
+.\vpn-server.exe -c config.server.local.toml
+.\vpn-client.exe -c config.client.toml
 ```
 
 ### Certificate Errors
 
-Make sure certificates are generated and paths in `config.server.toml` are correct:
+Make sure certificates are generated and paths are correct:
 
 ```bash
-ls -la vpn_server/cert/
-# Should show: ca.crt, ca.key, server.crt, server.key
+ls -la cert/
+# Should show: ca.crt, ca.key, server.crt, server.key, client.crt, client.key
 ```
 
 ### Port Already in Use
@@ -146,38 +216,69 @@ ls -la vpn_server/cert/
 If you get "address already in use" error:
 
 1. Check if another instance is running: `ps aux | grep vpn-server`
-2. Change the port in `config.server.toml`
-3. On Linux, check if port is in use: `sudo netstat -tulpn | grep 4433`
+2. Change ports in configuration files
+3. On Linux: `sudo netstat -tulpn | grep 4433`
 
-### Database Errors
+### Connection Issues
 
-The server creates a SQLite database file. Make sure the directory is writable:
+- Verify firewall settings allow traffic on configured ports
+- Check that client uses correct server address
+- Ensure certificates are valid and not expired
+- Review server logs for detailed error messages
+
+## Running Tests
+
+### Unit Tests
 
 ```bash
-touch vpn_server/masque_admin.db
-chmod 644 vpn_server/masque_admin.db
+# Test common package
+cd common && go test -v
+
+# Test server components
+cd vpn_server && go test -v ./...
+
+# Test client
+cd vpn_client && go test -v
+```
+
+### Integration Tests
+
+```bash
+# Run integration tests
+cd tests/integration && go test -v
+
+# Run load tests
+cd tests/load && go test -v
+```
+
+### Automated Testing
+
+```bash
+# Local testing script
+./scripts/test-local.sh
+
+# Docker testing script
+./scripts/test-docker.sh
 ```
 
 ## Next Steps
 
 After the server is running:
 
-1. Access the Web UI at `http://localhost:8080`
-2. Log in with default credentials (`admin` / `admin`)
-3. Generate client certificates through the web interface
-4. Configure Prometheus to scrape metrics from `http://localhost:9090/metrics`
-5. See [Monitoring Setup](../monitoring/setup.md) for Grafana dashboard configuration
+1. Test basic MASQUE protocol functionality with `test_masque_connection.go`
+2. Experiment with different network conditions using `tc` (Linux)
+3. Monitor performance using Prometheus metrics
+4. Study the custom MASQUE implementation in `common/masque_connectip.go`
+5. Explore the modular server architecture in `vpn_server/internal/server/`
 
-## Running in Production
+## Educational Use
 
-For production deployment:
+This implementation is designed for educational and research purposes:
 
-1. Use proper TLS certificates (not self-signed)
-2. Change default admin password
-3. Configure firewall rules
-4. Set up proper logging
-5. Configure monitoring and alerting
-6. Use systemd or similar for service management
+- **Protocol Study**: Learn MASQUE CONNECT-IP implementation details
+- **Performance Analysis**: Use built-in metrics for performance studies
+- **Network Research**: Test behavior under various network conditions
+- **Code Analysis**: Study modern Go networking patterns and QUIC usage
 
-See [Deployment Guide](deployment.md) for more details.
+See [Student Guide](../development/student-guide.ru.md) for detailed research scenarios and lab exercises.
 
