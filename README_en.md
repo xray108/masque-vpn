@@ -1,135 +1,214 @@
 # masque-vpn
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/iselt/masque-vpn)
+Educational VPN implementation based on the MASQUE (CONNECT-IP) protocol using QUIC transport.
 
-A VPN implementation based on the MASQUE (CONNECT-IP) protocol using QUIC transport.
-
-**⚠️ This project is in early development and is not ready for production use. It is intended for educational purposes and to demonstrate the MASQUE protocol.**
+**This project is intended for educational purposes and research in modern network protocols.**
 
 ```bash
-git clone --recurse-submodules https://github.com/twogc/masque-vpn.git
-```
-
-Or if you're using the original repository:
-
-```bash
-git clone --recurse-submodules https://github.com/iselt/masque-vpn.git
+git clone https://github.com/iselt/masque-vpn.git
 ```
 
 ## Features
 
-- **Modern Protocols**: Built on QUIC and MASQUE CONNECT-IP
+- **Modern Protocols**: Built on QUIC and MASQUE CONNECT-IP (RFC 9484)
+- **Custom MASQUE Implementation**: Own protocol implementation without external dependencies
+- **Modular Architecture**: Server split into specialized components
+- **REST API**: Full-featured API for management and monitoring
 - **Mutual TLS Authentication**: Certificate-based client-server authentication
-- **Web Management UI**: Browser-based client management and configuration
 - **Cross-Platform**: Supports Windows, Linux, and macOS
-- **IP Pool Management**: Automatic client IP allocation and routing
-- **Real-time Monitoring**: Live client connection status
+- **IP Pool Management**: Automatic client IP allocation
+- **Prometheus Monitoring**: Detailed metrics for performance analysis
+- **Comprehensive Testing**: Unit, integration, and load tests
+
+## Documentation
+
+Comprehensive documentation for students and researchers:
+
+- **[Student Guide (EN)](docs/development/student-guide.md)**: Laboratory assignments and research projects
+- **[Student Guide (RU)](docs/development/student-guide.ru.md)**: Лабораторные работы и исследовательские проекты
+- **[Architecture](docs/architecture/architecture.ru.md)**: System components and data flows
+- **[API Documentation](docs/api/api.ru.md)**: REST API for management and monitoring
+- **[Getting Started](docs/development/getting-started.md)**: Build and deployment instructions
+- **[Monitoring](docs/monitoring/setup.md)**: Prometheus and Grafana setup
 
 ## Architecture
 
-The system consists of:
-- **VPN Server**: Handles client connections and traffic routing
-- **VPN Client**: Connects to server and routes local traffic
-- **Web UI**: Management interface for certificates and clients
-- **Certificate System**: PKI-based authentication using mutual TLS
+The system consists of four main components:
+- **VPN Server**: Handles MASQUE CONNECT-IP requests and traffic routing
+- **VPN Client**: Connects to server via QUIC and tunnels IP packets
+- **REST API Server**: Client management and monitoring (port 8080)
+- **Common Libraries**: Custom MASQUE implementation and utilities
 
 ## Quick Start
 
 ### 1. Build
 
 ```bash
-cd vpn_client && go build
-cd ../vpn_server && go build
-cd ../admin_webui && npm install && npm run build
+# Build server
+cd vpn_server && go build -o vpn-server .
+
+# Build client
+cd ../vpn_client && go build -o vpn-client .
 ```
 
-### 2. Certificate Setup
+### 2. Generate Certificates
 
 ```bash
-cd vpn_server/cert
-# Generate CA certificate
-sh gen_ca.sh
-# Generate server certificate
-sh gen_server_keypair.sh
+cd cert
+
+# Linux/macOS
+./generate-test-certs.sh
+
+# Windows
+powershell -ExecutionPolicy Bypass -File generate-certs.ps1
 ```
 
-### 3. Server Configuration
-
-Copy and edit the server configuration:
-```bash
-cp vpn_server/config.server.toml.example vpn_server/config.server.toml
-```
-
-### 4. Start Server
+### 3. Start Server (Local Testing)
 
 ```bash
 cd vpn_server
-./vpn-server
+./vpn-server -c config.server.local.toml
 ```
 
-### 5. Web Management
+Server will start on:
+- MASQUE VPN: `127.0.0.1:4433`
+- REST API: `127.0.0.1:8080`
 
-- Access: `http://<server-ip>:8080/`
-- Default credentials: `admin` / `admin`
-- Generate client configurations through the web interface
+### 4. Test API
 
-### 6. Start Client
+```bash
+# Health check
+curl http://127.0.0.1:8080/health
+
+# Server status
+curl http://127.0.0.1:8080/api/v1/status
+
+# Prometheus metrics
+curl http://127.0.0.1:8080/metrics
+```
+
+### 5. Start Client
 
 ```bash
 cd vpn_client
-./vpn-client
+# Edit config.client.toml: server_addr = "127.0.0.1:4433"
+./vpn-client -c config.client.toml
+```
+
+### 6. Test MASQUE Protocol
+
+```bash
+# Functional test
+go run test_masque_connection.go
 ```
 
 ## Configuration
 
-### Server Configuration
+### Local Testing
 
-Key configuration options in `config.server.toml`:
+For local testing, use the provided configurations:
 
-| Option | Description | Example |
-|--------|-------------|---------|
-| `listen_addr` | Server listening address | `"0.0.0.0:4433"` |
-| `assign_cidr` | IP range for clients | `"10.0.0.0/24"` |
-| `advertise_routes` | Routes to advertise | `["0.0.0.0/0"]` |
-| `cert_file` | Server certificate path | `"cert/server.crt"` |
-| `key_file` | Server private key path | `"cert/server.key"` |
+**Server** (`config.server.local.toml`):
+```toml
+listen_addr = "127.0.0.1:4433"
+assign_cidr = "10.0.0.0/24"
+tun_name = ""  # TUN disabled for simplicity
+log_level = "debug"
 
-### Client Configuration
+[api_server]
+listen_addr = "127.0.0.1:8080"
+```
 
-Generated automatically via Web UI or manually configured:
+**Client** (`config.client.toml`):
+```toml
+server_addr = "127.0.0.1:4433"
+server_name = "masque-vpn-server"
+insecure_skip_verify = true  # For test certificates
+```
 
-| Option | Description |
-|--------|-------------|
-| `server_addr` | VPN server address |
-| `server_name` | Server name for TLS |
-| `ca_pem` | CA certificate (embedded) |
-| `cert_pem` | Client certificate (embedded) |
-| `key_pem` | Client private key (embedded) |
+### Production Deployment
 
-## Web Management Interface
+For production use:
+- Real certificates (not self-signed)
+- TUN devices for traffic routing
+- Firewall configuration for ports 4433 and 8080
+- Monitoring via Prometheus/Grafana
 
-The web interface provides:
+## REST API
 
-- **Client Management**: Generate, download, and delete client configurations
-- **Live Monitoring**: View connected clients and their IP assignments
-- **Certificate Management**: Automated certificate generation and distribution
-- **Configuration**: Server settings management
+API provides endpoints for management and monitoring:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /health` | API health check |
+| `GET /api/v1/status` | Server status |
+| `GET /api/v1/clients` | Client list |
+| `GET /api/v1/stats` | Server statistics |
+| `GET /api/v1/config` | Server configuration |
+| `GET /metrics` | Prometheus metrics |
+
+Details in [API documentation](docs/api/api.ru.md).
 
 ## Technical Details
 
+### Custom MASQUE Implementation
+
+The project includes a custom MASQUE CONNECT-IP implementation:
+- `common/masque_connectip.go` - MASQUE client
+- `common/masque_proxy.go` - IP packet proxying functions
+- `vpn_server/internal/server/masque_handler.go` - Server handler
+
+### Modular Server Architecture
+
+Server is split into specialized modules:
+- `server.go` - Main server and initialization
+- `api_server.go` - REST API server
+- `masque_handler.go` - MASQUE request handler
+- `packet_processor.go` - TUN device packet processing
+- `metrics.go` - Prometheus metrics
+- `tls_config.go` - TLS configuration
+
 ### Dependencies
 
-- **QUIC**: [quic-go](https://github.com/quic-go/quic-go) - QUIC protocol implementation
-- **MASQUE**: Custom implementation of MASQUE CONNECT-IP protocol based on quic-go
-- **Database**: SQLite for client and configuration storage
-- **TUN**: Cross-platform TUN device management
+- **Go 1.25** - Modern language version
+- **QUIC**: [quic-go v0.57.1](https://github.com/quic-go/quic-go) - QUIC protocol
+- **HTTP Framework**: [Gin](https://github.com/gin-gonic/gin) - for REST API
+- **Metrics**: [Prometheus client](https://github.com/prometheus/client_golang) - metrics
+- **Logging**: [Zap](https://github.com/uber-go/zap) - structured logging
 
 ### Security
 
-- **Mutual TLS**: Both client and server authenticate using certificates
-- **Certificate Authority**: Self-signed CA for certificate management
-- **Unique Client IDs**: Each client has a unique identifier
-- **IP Isolation**: Clients receive individual IP assignments
+- **Mutual TLS**: Client and server authenticate with certificates
+- **Self-signed CA**: For testing and educational purposes
+- **Client isolation**: Each client receives a unique IP address
+- **Request validation**: MASQUE header and parameter validation
+
+## Testing
+
+### Run Tests
+
+```bash
+# Unit tests
+cd common && go test -v
+cd vpn_server && go test -v ./...
+cd vpn_client && go test -v
+
+# Integration tests
+cd tests/integration && go test -v
+
+# Load tests
+cd tests/load && go test -v
+```
+
+### Automated Testing
+
+```bash
+# Local testing
+./scripts/test-local.sh
+
+# Docker testing
+./scripts/test-docker.sh
+```
 
 ## Development
 
@@ -137,182 +216,107 @@ The web interface provides:
 
 ```
 masque-vpn/
-├── common/           # Shared code and utilities
-├── vpn_client/       # Client implementation
-├── vpn_server/       # Server implementation
-│   └── cert/         # Certificate generation scripts
-├── admin_webui/      # Web UI assets
-└── README.md
+├── common/                    # Common libraries
+│   ├── masque_connectip.go   # MASQUE client
+│   ├── masque_proxy.go       # Packet proxying
+│   └── errors.go             # Error system
+├── vpn_server/               # Server
+│   ├── internal/server/      # Server modules
+│   └── main.go              # Entry point
+├── vpn_client/              # Client
+├── tests/                   # Tests
+├── docs/                    # Documentation
+└── cert/                    # Certificate generation
 ```
 
-### Building from Source
+### Development Requirements
 
-Requirements:
-- Go 1.25.0 or later
+- Go 1.25 or later
 - OpenSSL (for certificate generation)
+- Docker (for containerization)
+- Make (for automation)
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Certificate Errors**: Ensure CA and certificates are properly generated
-2. **Permission Issues**: TUN device creation requires administrator privileges
-3. **Firewall**: Ensure server port (default 4433) is accessible
-4. **MTU Issues**: Adjust MTU settings if experiencing connectivity problems
+**Build errors**:
+- Ensure Go 1.25+ is installed
+- Run `go mod tidy` to update dependencies
 
+**Certificate errors**:
+- Regenerate certificates if expired
+- Check certificate paths in configuration
 
-### macOS-Specific Issues
+**Connection failures**:
+- Check firewall settings for ports 4433 and 8080
+- Verify server is listening on correct addresses
+- Test API endpoints with curl
 
-#### Technical Details
+**Performance issues**:
+- Monitor system resources (CPU, memory)
+- Check server logs for errors
+- Use Prometheus metrics for analysis
 
-**Point-to-Point Interfaces**
+### Debug Mode
 
-TUN devices on macOS create a virtual point-to-point tunnel between two endpoints:
-- **Server (local)**: gateway IP (e.g., 10.0.0.1)
-- **Client (destination)**: next IP address (e.g., 10.0.0.2)
+```bash
+# Run with debug logging
+./vpn-server -c config.server.local.toml  # already has log_level = "debug"
 
-The `Next()` method from the `netip` package returns the next IP address:
-- `10.0.0.1.Next()` → `10.0.0.2`
-- `192.168.1.1.Next()` → `192.168.1.2`
-
-**WireGuard TUN Offset**
-
-WireGuard TUN on macOS uses an offset for packet header placement:
-- **4 bytes** - minimum offset required for macOS
-- **10 bytes** - used in `proxy.go` (VirtioNetHdrLen)
-
-The offset indicates where packet data begins in the buffer. The library writes the header before this position:
-
-```
-Buffer: [header (4 bytes)][packet data (n bytes)]
-                         ^
-                         offset=4
+# Check API logs
+curl http://127.0.0.1:8080/api/v1/logs
 ```
 
-**Platform Compatibility**
+## Educational Use
 
-These fixes are macOS-specific and don't affect other platforms:
-- **Linux**: uses `tun_linux.go`
-- **Windows**: uses `tun_windows.go`
-## Contributing
+### For Students and Researchers
 
-This project is for educational purposes. Contributions are welcome for:
-- Protocol improvements
-- Cross-platform compatibility
-- Documentation enhancements
-- Bug fixes
-
-## References
-
-- [MASQUE Protocol Specification](https://datatracker.ietf.org/doc/draft-ietf-masque-connect-ip/)
-- [QUIC Protocol](https://datatracker.ietf.org/doc/rfc9000/)
-- [quic-go Library](https://github.com/quic-go/quic-go)
-
-### Standards and RFCs
-
-- **MASQUE CONNECT-IP**: [RFC 9484](https://datatracker.ietf.org/doc/html/rfc9484) - Proxying IP in HTTP
-- **MASQUE CONNECT-UDP**: [RFC 9298](https://datatracker.ietf.org/doc/html/rfc9298) - Proxying UDP in HTTP
-- **QUIC Transport**: [RFC 9000](https://datatracker.ietf.org/doc/html/rfc9000) - QUIC: A UDP-Based Multiplexed and Secure Transport
-- **HTTP Datagrams**: [RFC 9297](https://datatracker.ietf.org/doc/html/rfc9297) - HTTP Datagrams and the Capsule Protocol
-
-This project is built upon the following open-source libraries:
-
-* [quic-go](https://github.com/quic-go/quic-go) - A QUIC implementation in Go
-* Custom implementation of MASQUE CONNECT-IP protocol
-
-## For MPEI Students and Researchers
-
-This project is part of the educational materials for the National Research University "MPEI" (Moscow Power Engineering Institute) course on modern network protocols for autonomous systems (UAS - Unmanned Aerial Systems).
-
-### Connection to MPEI Curriculum
-
-This implementation demonstrates **MASQUE CONNECT-IP (RFC 9484)** - a modern protocol for tunneling IP packets over HTTP/3 (QUIC), which is covered in the National Research University "MPEI" course "Personnel for Autonomous Systems".
-
-**Course Resources:**
-- OpenEdu Course: [openedu.mpei.ru/course/BAS_2](https://openedu.mpei.ru/course/BAS_2)
-- Federal Project: "Personnel for Autonomous Systems"
-
-### Why MASQUE for Autonomous Systems?
-
-MASQUE CONNECT-IP solves critical connectivity challenges for autonomous systems:
-
-1. **Corporate Network Bypass**: Many corporate networks block UDP traffic. MASQUE tunnels IP packets over QUIC (UDP:443), making it look like HTTPS traffic and bypassing firewalls.
-
-2. **Mobile Network Optimization**: QUIC's built-in features (0-RTT, connection migration, multiplexing) provide better performance than traditional VPN protocols in mobile scenarios.
-
-3. **Standards-Based**: Unlike proprietary VPN solutions, MASQUE is an IETF standard (RFC 9484), ensuring interoperability and future compatibility.
-
-### Research Topics for Students
-
-This project can serve as a foundation for diploma work, research projects, or laboratory assignments:
-
-#### 1. Performance Analysis
-- Compare MASQUE VPN performance vs traditional VPN protocols (OpenVPN, WireGuard)
-- Measure latency, throughput, and jitter under different network conditions
-- Analyze QUIC connection migration impact on VPN stability
-
-#### 2. Security Evaluation
-- Evaluate mutual TLS authentication implementation
-- Analyze certificate management and PKI security
-- Study anti-replay mechanisms for 0-RTT connections
-
-#### 3. Network Optimization
-- Implement and test BBRv3 congestion control for MASQUE tunnels
-- Optimize IP pool management and routing algorithms
-- Study the impact of packet loss on VPN performance
-
-#### 4. Integration with Autonomous Systems
-- Integrate MASQUE VPN with ground control stations
-- Implement handover prediction for mobile scenarios
-- Design failover mechanisms for critical connections
-
-#### 5. Protocol Extensions
-- Implement additional MASQUE features (CONNECT-UDP for specific use cases)
-- Add support for IPv6 tunneling
-- Integrate with AI-based routing systems
+This project is designed for studying:
+- **Modern Network Protocols**: QUIC, HTTP/3, MASQUE
+- **Go Programming**: Concurrency, networking, testing
+- **System Design**: Modular architecture, API design, monitoring
+- **Research Methodology**: Performance analysis, data collection, documentation
 
 ### Laboratory Assignments
 
-**Basic Level:**
-1. Set up MASQUE VPN server and client
-2. Configure certificate-based authentication
-3. Test connectivity through corporate firewalls
-4. Monitor connection metrics (latency, throughput)
+1. **Basic Deployment** - build and run the system
+2. **Performance Analysis** - measure VPN metrics
+3. **Protocol Deep Dive** - study MASQUE implementation
+4. **Network Conditions Testing** - emulate network problems
 
-**Advanced Level:**
-1. Implement custom routing policies
-2. Add performance monitoring and metrics collection
-3. Integrate with network emulation tools (tc, netem)
-4. Compare performance with traditional VPN solutions
+### Research Projects
 
-**Research Level:**
-1. Implement and test protocol optimizations
-2. Design and evaluate new features
-3. Publish results in academic conferences
-4. Contribute improvements back to the project
+- MASQUE performance optimization
+- Load behavior analysis
+- Security research
+- Monitoring and observability systems
 
-### Getting Started for Research
+Details in [student guide](docs/development/student-guide.md).
 
-1. **Fork this repository**: Create your own fork for experiments
-2. **Read the code**: Understand the architecture in `vpn_server/` and `vpn_client/`
-3. **Set up test environment**: Use network emulation to simulate various conditions
-4. **Collect metrics**: Implement logging and monitoring for your research
-5. **Document findings**: Write reports comparing different configurations
+## Contributing
 
-### Contact and Collaboration
+This project is created for educational purposes. Contributions welcome for:
+- Protocol implementation improvements
+- Cross-platform compatibility
+- Documentation enhancements
+- Bug fixes
+- New test scenarios
 
-For questions about using this project in National Research University "MPEI" research:
-- Check the original repository: [iselt/masque-vpn](https://github.com/iselt/masque-vpn)
-- CloudBridge Research: [2gc.ru](https://2gc.ru)
+## Standards and RFCs
 
-### Related Projects
+- **MASQUE CONNECT-IP**: [RFC 9484](https://datatracker.ietf.org/doc/html/rfc9484) - Proxying IP in HTTP
+- **QUIC Transport**: [RFC 9000](https://datatracker.ietf.org/doc/html/rfc9000) - QUIC transport
+- **HTTP/3**: [RFC 9114](https://datatracker.ietf.org/doc/html/rfc9114) - HTTP/3 protocol
 
-- [CloudBridge QUIC Test Suite](https://github.com/twogc/cloudbridge-relay-installer) - QUIC protocol testing and benchmarking
-- [CloudBridge Research](https://cloudbridge-research.ru) - Research documentation and publications
+## Support
 
-## 中文文档
+For questions and collaboration:
+- Original repository: [iselt/masque-vpn](https://github.com/iselt/masque-vpn)
+- GitHub discussions and issues
+- Educational institutions welcome to fork and adapt
 
-请参考 [README_zh.md](README_zh.md) 获取中文使用说明。
-## Документация на других языках
+## Other Languages
 
-Русская документация: [README_ru.md](README.md)
+- [Русская документация](README.md) - Russian documentation
+- [中文文档](README_zh.md) - Chinese documentation

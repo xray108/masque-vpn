@@ -1,165 +1,232 @@
 # masque-vpn
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/iselt/masque-vpn)
+基于 MASQUE (CONNECT-IP) 协议的教育用 VPN 实现。
 
-基于 MASQUE (CONNECT-IP) 协议的 VPN 实现。
+**本项目专为教育目的和现代网络协议研究而设计。**
 
-**⚠️ 本项目处于早期开发阶段，暂不适合生产环境使用，仅供学习和 MASQUE 协议演示用途。**
+```bash
+git clone https://github.com/iselt/masque-vpn.git
+```
 
 ## 特性
 
-- **现代协议**: 基于 QUIC 和 MASQUE CONNECT-IP 构建
+- **现代协议**: 基于 QUIC 和 MASQUE CONNECT-IP (RFC 9484) 构建
+- **自定义 MASQUE 实现**: 无外部依赖的自主协议实现
+- **模块化架构**: 服务器分为专业化组件
+- **REST API**: 用于管理和监控的全功能 API
 - **双向 TLS 认证**: 基于证书的客户端-服务器认证
-- **Web 管理界面**: 基于浏览器的客户端管理和配置
 - **跨平台支持**: 支持 Windows、Linux 和 macOS
-- **IP 池管理**: 自动客户端 IP 分配和路由
-- **实时监控**: 实时客户端连接状态
+- **IP 池管理**: 自动客户端 IP 分配
+- **Prometheus 监控**: 用于性能分析的详细指标
+- **全面测试**: 单元测试、集成测试和负载测试
+
+## 文档
+
+为学生和研究人员提供的全面文档：
+
+- **[学生指南 (EN)](docs/development/student-guide.md)**: 实验作业和研究项目
+- **[学生指南 (RU)](docs/development/student-guide.ru.md)**: 实验作业和研究项目
+- **[架构文档](docs/architecture/architecture.ru.md)**: 系统组件和数据流
+- **[API 文档](docs/api/api.ru.md)**: 管理和监控 REST API
+- **[入门指南](docs/development/getting-started.md)**: 构建和部署说明
+- **[监控设置](docs/monitoring/setup.md)**: Prometheus 和 Grafana 配置
 
 ## 架构
 
-系统组成：
-- **VPN 服务器**: 处理客户端连接和流量路由
-- **VPN 客户端**: 连接服务器并路由本地流量
-- **Web 界面**: 证书和客户端管理界面
-- **证书系统**: 基于 PKI 的双向 TLS 认证
+系统由四个主要组件组成：
+- **VPN 服务器**: 处理 MASQUE CONNECT-IP 请求和流量路由
+- **VPN 客户端**: 通过 QUIC 连接服务器并隧道传输 IP 数据包
+- **REST API 服务器**: 客户端管理和监控（端口 8080）
+- **通用库**: 自定义 MASQUE 实现和工具
 
 ## 快速开始
 
 ### 1. 编译
 
 ```bash
-cd vpn_client && go build
-cd ../vpn_server && go build
-cd ../admin_webui && npm install && npm run build
+# 编译服务器
+cd vpn_server && go build -o vpn-server .
+
+# 编译客户端
+cd ../vpn_client && go build -o vpn-client .
 ```
 
-### 2. 证书设置
+### 2. 生成证书
 
 ```bash
-cd vpn_server/cert
-# 生成 CA 证书
-sh gen_ca.sh
-# 生成服务器证书
-sh gen_server_keypair.sh
+cd cert
+
+# Linux/macOS
+./generate-test-certs.sh
+
+# Windows
+powershell -ExecutionPolicy Bypass -File generate-certs.ps1
 ```
 
-### 3. 服务器配置
-
-复制并编辑服务器配置：
-```bash
-cp vpn_server/config.server.toml.example vpn_server/config.server.toml
-```
-
-### 4. 启动服务器
+### 3. 启动服务器（本地测试）
 
 ```bash
 cd vpn_server
-./vpn-server
+./vpn-server -c config.server.local.toml
 ```
 
-### 5. Web 管理
+服务器将在以下端口启动：
+- MASQUE VPN: `127.0.0.1:4433`
+- REST API: `127.0.0.1:8080`
 
-- 访问地址: `http://<服务器IP>:8080/`
-- 默认账号: `admin` / `admin`
-- 通过 Web 界面生成客户端配置
+### 4. 测试 API
 
-### 6. 启动客户端
+```bash
+# 健康检查
+curl http://127.0.0.1:8080/health
+
+# 服务器状态
+curl http://127.0.0.1:8080/api/v1/status
+
+# Prometheus 指标
+curl http://127.0.0.1:8080/metrics
+```
+
+### 5. 启动客户端
 
 ```bash
 cd vpn_client
-./vpn-client
+# 编辑 config.client.toml: server_addr = "127.0.0.1:4433"
+./vpn-client -c config.client.toml
 ```
 
-## 配置说明
+### 6. 测试 MASQUE 协议
 
-### 服务器配置
+```bash
+# 功能测试
+go run test_masque_connection.go
+```
 
-`config.server.toml` 中的主要配置选项：
+## 配置
 
-| 选项 | 说明 | 示例 |
-|------|------|------|
-| `listen_addr` | 服务器监听地址 | `"0.0.0.0:4433"` |
-| `assign_cidr` | 客户端 IP 范围 | `"10.0.0.0/24"` |
-| `advertise_routes` | 广播路由 | `["0.0.0.0/0"]` |
-| `cert_file` | 服务器证书路径 | `"cert/server.crt"` |
-| `key_file` | 服务器私钥路径 | `"cert/server.key"` |
+### 本地测试
 
-### 客户端配置
+本地测试使用提供的配置：
 
-通过 Web 界面自动生成或手动配置：
+**服务器** (`config.server.local.toml`):
+```toml
+listen_addr = "127.0.0.1:4433"
+assign_cidr = "10.0.0.0/24"
+tun_name = ""  # 为简化而禁用 TUN
+log_level = "debug"
 
-| 选项 | 说明 |
+[api_server]
+listen_addr = "127.0.0.1:8080"
+```
+
+**客户端** (`config.client.toml`):
+```toml
+server_addr = "127.0.0.1:4433"
+server_name = "masque-vpn-server"
+insecure_skip_verify = true  # 用于测试证书
+```
+
+## REST API
+
+API 提供管理和监控端点：
+
+| 端点 | 描述 |
 |------|------|
-| `server_addr` | VPN 服务器地址 |
-| `server_name` | TLS 服务器名称 |
-| `ca_pem` | CA 证书（内嵌） |
-| `cert_pem` | 客户端证书（内嵌） |
-| `key_pem` | 客户端私钥（内嵌） |
+| `GET /health` | API 健康检查 |
+| `GET /api/v1/status` | 服务器状态 |
+| `GET /api/v1/clients` | 客户端列表 |
+| `GET /api/v1/stats` | 服务器统计 |
+| `GET /api/v1/config` | 服务器配置 |
+| `GET /metrics` | Prometheus 指标 |
 
-## Web 管理界面
-
-Web 界面提供：
-
-- **客户端管理**: 生成、下载和删除客户端配置
-- **实时监控**: 查看已连接客户端及其 IP 分配
-- **证书管理**: 自动化证书生成和分发
-- **配置管理**: 服务器设置管理
+详情请参阅 [API 文档](docs/api/api.ru.md)。
 
 ## 技术细节
 
+### 自定义 MASQUE 实现
+
+项目包含自定义 MASQUE CONNECT-IP 实现：
+- `common/masque_connectip.go` - MASQUE 客户端
+- `common/masque_proxy.go` - IP 数据包代理功能
+- `vpn_server/internal/server/masque_handler.go` - 服务器处理程序
+
+### 模块化服务器架构
+
+服务器分为专业化模块：
+- `server.go` - 主服务器和初始化
+- `api_server.go` - REST API 服务器
+- `masque_handler.go` - MASQUE 请求处理程序
+- `packet_processor.go` - TUN 设备数据包处理
+- `metrics.go` - Prometheus 指标
+- `tls_config.go` - TLS 配置
+
 ### 依赖项
 
-- **QUIC**: [quic-go](https://github.com/quic-go/quic-go) - QUIC 协议实现
-- **MASQUE**: 基于 quic-go 的自定义 MASQUE CONNECT-IP 协议实现
-- **数据库**: SQLite 用于客户端和配置存储
-- **TUN**: 跨平台 TUN 设备管理
+- **Go 1.25** - 现代语言版本
+- **QUIC**: [quic-go v0.57.1](https://github.com/quic-go/quic-go) - QUIC 协议
+- **HTTP 框架**: [Gin](https://github.com/gin-gonic/gin) - 用于 REST API
+- **指标**: [Prometheus client](https://github.com/prometheus/client_golang) - 指标
+- **日志**: [Zap](https://github.com/uber-go/zap) - 结构化日志
 
-### 安全性
+## 测试
 
-- **双向 TLS**: 客户端和服务器使用证书相互认证
-- **证书颁发机构**: 自签名 CA 用于证书管理
-- **唯一客户端 ID**: 每个客户端都有唯一标识符
-- **IP 隔离**: 客户端接收独立的 IP 分配
+### 运行测试
 
-## 开发
+```bash
+# 单元测试
+cd common && go test -v
+cd vpn_server && go test -v ./...
+cd vpn_client && go test -v
 
-### 项目结构
+# 集成测试
+cd tests/integration && go test -v
 
-```
-masque-vpn/
-├── common/           # 共享代码和工具
-├── vpn_client/       # 客户端实现
-├── vpn_server/       # 服务器实现
-│   └── cert/         # 证书生成脚本
-├── admin_webui/      # Web 界面资源
-└── README_zh.md
+# 负载测试
+cd tests/load && go test -v
 ```
 
-### 从源码构建
+## 教育用途
 
-要求：
-- Go 1.25.0 或更高版本
-- OpenSSL（用于证书生成）
+### 面向学生和研究人员
 
-## 故障排除
+本项目专为学习以下内容而设计：
+- **现代网络协议**: QUIC、HTTP/3、MASQUE
+- **Go 编程**: 并发、网络、测试
+- **系统设计**: 模块化架构、API 设计、监控
+- **研究方法**: 性能分析、数据收集、文档编写
 
-### 常见问题
+### 实验作业
 
-1. **证书错误**: 确保 CA 和证书正确生成
-2. **权限问题**: TUN 设备创建需要管理员权限
-3. **防火墙**: 确保服务器端口（默认 4433）可访问
-4. **MTU 问题**: 如遇连接问题，请调整 MTU 设置
+1. **基础部署** - 构建和运行系统
+2. **性能分析** - 测量 VPN 指标
+3. **协议深入研究** - 学习 MASQUE 实现
+4. **网络条件测试** - 模拟网络问题
+
+详情请参阅[学生指南](docs/development/student-guide.md)。
 
 ## 贡献
 
-本项目用于教育目的。欢迎贡献：
-- 协议改进
+本项目为教育目的而创建。欢迎以下贡献：
+- 协议实现改进
 - 跨平台兼容性
-- 文档完善
+- 文档增强
 - 错误修复
+- 新测试场景
 
-## 参考资料
+## 标准和 RFC
 
-- [MASQUE 协议规范](https://datatracker.ietf.org/doc/draft-ietf-masque-connect-ip/)
-- [QUIC 协议](https://datatracker.ietf.org/doc/rfc9000/)
-- [quic-go 库](https://github.com/quic-go/quic-go)
+- **MASQUE CONNECT-IP**: [RFC 9484](https://datatracker.ietf.org/doc/html/rfc9484) - HTTP 中的 IP 代理
+- **QUIC 传输**: [RFC 9000](https://datatracker.ietf.org/doc/html/rfc9000) - QUIC 传输
+- **HTTP/3**: [RFC 9114](https://datatracker.ietf.org/doc/html/rfc9114) - HTTP/3 协议
+
+## 支持
+
+如有问题和合作：
+- 原始仓库: [iselt/masque-vpn](https://github.com/iselt/masque-vpn)
+- GitHub 讨论和问题
+- 欢迎教育机构分叉和适配
+
+## 其他语言
+
+- [Русская документация](README.md) - 俄语文档
+- [English Documentation](README_en.md) - 英语文档
