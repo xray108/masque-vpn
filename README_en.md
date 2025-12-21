@@ -5,7 +5,7 @@ Educational VPN implementation based on the MASQUE (CONNECT-IP) protocol using Q
 **This project is intended for educational purposes and research in modern network protocols.**
 
 ```bash
-git clone https://github.com/iselt/masque-vpn.git
+git clone https://github.com/cloudbridge-research/masque-vpn.git
 ```
 
 ## Features
@@ -312,6 +312,7 @@ This project is created for educational purposes. Contributions welcome for:
 ## Support
 
 For questions and collaboration:
+- Project repository: [cloudbridge-research/masque-vpn](https://github.com/cloudbridge-research/masque-vpn)
 - Original repository: [iselt/masque-vpn](https://github.com/iselt/masque-vpn)
 - GitHub discussions and issues
 - Educational institutions welcome to fork and adapt

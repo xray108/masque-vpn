@@ -20,7 +20,7 @@ masque-vpn is an educational implementation of the MASQUE CONNECT-IP protocol (R
 
 ```bash
 # Clone repository
-git clone https://github.com/iselt/masque-vpn.git
+git clone https://github.com/cloudbridge-research/masque-vpn.git
 cd masque-vpn
 
 # Build server and client
@@ -358,6 +358,7 @@ This project provides hands-on experience with:
 ## Support and Collaboration
 
 For academic use and research collaboration:
+- Project repository: [cloudbridge-research/masque-vpn](https://github.com/cloudbridge-research/masque-vpn)
 - Original repository: [iselt/masque-vpn](https://github.com/iselt/masque-vpn)
 - Issues and discussions on GitHub
 - Educational institutions welcome to fork and adapt

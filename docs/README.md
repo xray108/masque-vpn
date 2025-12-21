@@ -103,6 +103,7 @@ For educational institutions and researchers:
 
 ## Support
 
+- Project repository: [cloudbridge-research/masque-vpn](https://github.com/cloudbridge-research/masque-vpn)
 - Original repository: [iselt/masque-vpn](https://github.com/iselt/masque-vpn)
 - Educational materials and courses
 - Research collaboration opportunities

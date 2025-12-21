@@ -267,6 +267,7 @@ curl http://127.0.0.1:8080/api/v1/clients
 ## Поддержка
 
 Для вопросов и сотрудничества:
+- Репозиторий проекта: [cloudbridge-research/masque-vpn](https://github.com/cloudbridge-research/masque-vpn)
 - Оригинальный репозиторий: [iselt/masque-vpn](https://github.com/iselt/masque-vpn)
 - Обсуждения и вопросы на GitHub
 - Образовательные учреждения могут форкать и адаптировать проект
