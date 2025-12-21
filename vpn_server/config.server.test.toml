@@ -1,0 +1,44 @@
+# MASQUE VPN Server Configuration - Test Mode (без TUN устройства)
+
+# Network configuration
+listen_addr = "0.0.0.0:4433"
+assign_cidr = "10.0.0.0/24"
+advertise_routes = [
+  "0.0.0.0/0",
+  "10.99.0.0/24"
+]
+
+# TLS certificates
+cert_file = "cert/server.crt"
+key_file = "cert/server.key"
+ca_cert_file = "cert/ca.crt"
+ca_key_file = "cert/ca.key"
+
+# Logging configuration
+log_level = "debug"
+
+# Server name
+server_name = "masque-vpn-server"
+
+# Maximum Transmission Unit
+mtu = 1413
+
+# Отключаем TUN устройство для тестирования
+# tun_name = ""
+
+# API server configuration
+[api_server]
+listen_addr = "0.0.0.0:8080"
+static_dir = "../admin_webui/dist"
+database_path = "masque_admin.db"
+
+# Metrics configuration
+[metrics]
+enabled = true
+listen_addr = "0.0.0.0:9090"
+
+# Forward Error Correction configuration
+[fec]
+enabled = false
+redundancy = 0.2
+block_size = 10

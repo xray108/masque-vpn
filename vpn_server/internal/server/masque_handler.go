@@ -213,6 +213,13 @@ func (s *Server) handleClientConnection(session *ClientSession, clientID string,
 func (s *Server) proxyTunToClient(ctx context.Context, session *ClientSession, clientIP netip.Addr) error {
 	log.Printf("Starting TUN->Client proxy for IP %s", clientIP)
 	
+	// Проверяем наличие TUN устройства
+	if s.TunDev == nil {
+		log.Printf("TUN device not available, TUN->Client proxy disabled for IP %s", clientIP)
+		<-ctx.Done()
+		return nil
+	}
+	
 	buffer := make([]byte, 2048)
 	
 	for {
@@ -272,6 +279,13 @@ func (s *Server) proxyTunToClient(ctx context.Context, session *ClientSession, c
 // proxyClientToTun проксирует пакеты от клиента к TUN устройству
 func (s *Server) proxyClientToTun(ctx context.Context, session *ClientSession, clientIP netip.Addr) error {
 	log.Printf("Starting Client->TUN proxy for IP %s", clientIP)
+	
+	// Проверяем наличие TUN устройства
+	if s.TunDev == nil {
+		log.Printf("TUN device not available, Client->TUN proxy disabled for IP %s", clientIP)
+		<-ctx.Done()
+		return nil
+	}
 	
 	buffer := make([]byte, 2048)
 	

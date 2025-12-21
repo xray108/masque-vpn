@@ -13,15 +13,15 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 # Copy go mod files
-COPY go.mod go.sum ./
-COPY ../common/go.mod ../common/go.sum ../common/
+COPY vpn_server/go.mod vpn_server/go.sum ./
+COPY common/go.mod common/go.sum ../common/
 
 # Download dependencies
 RUN go mod download
 
 # Copy source code
-COPY . .
-COPY ../common ../common/
+COPY vpn_server/ .
+COPY common/ ../common/
 
 # Build the application
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o vpn-server .
@@ -54,7 +54,7 @@ COPY --from=builder /app/config.server.toml.example /app/config.server.toml
 COPY cert/ /app/cert/
 
 # Set permissions
-RUN chmod +x /app/vpn-server /app/cert/*.sh
+RUN chmod +x /app/vpn-server
 
 # Switch to non-root user for security
 USER vpn

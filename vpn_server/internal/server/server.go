@@ -24,6 +24,7 @@ type Server struct {
 	IPConnMap   map[netip.Addr]*ClientSession
 	IPPoolMu    sync.RWMutex
 	Metrics     *Metrics
+	APIServer   *APIServer
 }
 
 // New создает новый экземпляр сервера
@@ -36,18 +37,26 @@ func New(config common.ServerConfig) (*Server, error) {
 
 	ipPool := common.NewIPPool(networkInfo.GetPrefix(), networkInfo.GetGateway().Addr())
 
-	// Создаем TUN устройство
-	tunDev, err := common.CreateTunDevice(config.TunName, net.IPNet{
-		IP:   networkInfo.GetGateway().Addr().AsSlice(),
-		Mask: net.CIDRMask(networkInfo.GetGateway().Bits(), networkInfo.GetGateway().Addr().BitLen()),
-	}, config.MTU)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create TUN device: %w", err)
+	// Создаем TUN устройство (опционально)
+	var tunDev *common.TUNDevice
+	if config.TunName != "" {
+		tunDev, err = common.CreateTunDevice(config.TunName, net.IPNet{
+			IP:   networkInfo.GetGateway().Addr().AsSlice(),
+			Mask: net.CIDRMask(networkInfo.GetGateway().Bits(), networkInfo.GetGateway().Addr().BitLen()),
+		}, config.MTU)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create TUN device: %w", err)
+		}
+		log.Printf("TUN device created: %s", tunDev.Name())
+	} else {
+		log.Printf("TUN device disabled (empty tun_name)")
 	}
 
 	// Инициализируем метрики
 	metrics := NewMetrics()
-	metrics.TunInterfaceStatus.Set(1) // TUN устройство активно
+	if tunDev != nil {
+		metrics.TunInterfaceStatus.Set(1) // TUN устройство активно
+	}
 
 	server := &Server{
 		Config:      config,
@@ -58,13 +67,27 @@ func New(config common.ServerConfig) (*Server, error) {
 		Metrics:     metrics,
 	}
 
-	// Запускаем обработчик пакетов
-	go server.processPackets()
+	// Создаем API сервер
+	apiServer, err := NewAPIServer(server)
+	if err != nil {
+		if tunDev != nil {
+			tunDev.Close()
+		}
+		return nil, fmt.Errorf("failed to create API server: %w", err)
+	}
+	server.APIServer = apiServer
+
+	// Запускаем обработчик пакетов только если есть TUN устройство
+	if tunDev != nil {
+		go server.processPackets()
+		log.Printf("TUN Device: %s", tunDev.Name())
+	} else {
+		log.Printf("TUN Device: disabled")
+	}
 
 	log.Printf("MASQUE VPN Server initialized")
 	log.Printf("Listen Address: %s", server.Config.ListenAddr)
 	log.Printf("VPN Network: %s", server.Config.AssignCIDR)
-	log.Printf("TUN Device: %s", tunDev.Name())
 	log.Printf("Advertised Routes: %v", server.Config.AdvertiseRoutes)
 
 	return server, nil
@@ -103,8 +126,16 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 
 	log.Printf("MASQUE VPN Server listening on %s", s.Config.ListenAddr)
+	log.Printf("API Server will start on %s", s.Config.APIServer.ListenAddr)
 	
-	// Запускаем сервер в отдельной горутине
+	// Запускаем API сервер в отдельной горутине
+	go func() {
+		if err := s.APIServer.Start(); err != nil {
+			log.Printf("API Server error: %v", err)
+		}
+	}()
+	
+	// Запускаем MASQUE сервер в отдельной горутине
 	errChan := make(chan error, 1)
 	go func() {
 		errChan <- server.ListenAndServe()
@@ -160,6 +191,13 @@ func (s *Server) Close() error {
 			log.Printf("Error closing TUN device: %v", err)
 		}
 		s.Metrics.TunInterfaceStatus.Set(0)
+	}
+
+	// Закрываем API сервер
+	if s.APIServer != nil {
+		if err := s.APIServer.Close(); err != nil {
+			log.Printf("Error closing API server: %v", err)
+		}
 	}
 
 	log.Printf("MASQUE VPN Server closed")
