@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"net/netip"
@@ -177,4 +178,39 @@ func isNetworkClosed(err error) bool {
 	return errStr == "EOF" || 
 		   errStr == "connection reset by peer" ||
 		   errStr == "use of closed network connection"
+}
+
+// parseSourceIP извлекает IP источника из пакета
+func (s *Server) parseSourceIP(packet []byte) (netip.Addr, error) {
+	if len(packet) < 20 {
+		return netip.Addr{}, fmt.Errorf("packet too short")
+	}
+
+	// Проверяем версию IP
+	version := packet[0] >> 4
+	
+	switch version {
+	case 4:
+		// IPv4 - адрес источника в байтах 12-15
+		if len(packet) < 20 {
+			return netip.Addr{}, fmt.Errorf("IPv4 packet too short")
+		}
+		srcBytes := packet[12:16]
+		addr := netip.AddrFrom4([4]byte{srcBytes[0], srcBytes[1], srcBytes[2], srcBytes[3]})
+		return addr, nil
+		
+	case 6:
+		// IPv6 - адрес источника в байтах 8-23
+		if len(packet) < 40 {
+			return netip.Addr{}, fmt.Errorf("IPv6 packet too short")
+		}
+		srcBytes := packet[8:24]
+		var addr16 [16]byte
+		copy(addr16[:], srcBytes)
+		addr := netip.AddrFrom16(addr16)
+		return addr, nil
+		
+	default:
+		return netip.Addr{}, fmt.Errorf("unsupported IP version: %d", version)
+	}
 }

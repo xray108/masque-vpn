@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/netip"
+	"strings"
 	"time"
 
 	common "github.com/iselt/masque-vpn/common"
@@ -13,11 +15,22 @@ import (
 
 // handleMASQUERequest обрабатывает MASQUE CONNECT-IP запросы
 func (s *Server) handleMASQUERequest(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received MASQUE request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+	log.Printf("Received request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
 
-	// Проверяем, что это CONNECT-IP запрос
-	if r.Method != "CONNECT-IP" {
+	// MASQUE CONNECT-IP использует обычный HTTP CONNECT метод с специальными заголовками
+	if r.Method != http.MethodConnect {
+		// Для других методов возвращаем информацию о сервере
+		if r.Method == http.MethodGet && r.URL.Path == "/" {
+			s.handleServerInfo(w, r)
+			return
+		}
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Проверяем заголовки MASQUE
+	if !s.isMASQUERequest(r) {
+		http.Error(w, "Not a MASQUE request", http.StatusBadRequest)
 		return
 	}
 
@@ -46,15 +59,17 @@ func (s *Server) handleMASQUERequest(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Assigned IP %s to client %s", assignedPrefix, clientID)
 
-	// Отправляем успешный ответ
-	w.Header().Set("Content-Type", "application/connect-ip")
+	// Отправляем успешный ответ CONNECT
+	w.Header().Set("Content-Type", "application/masque")
 	w.WriteHeader(http.StatusOK)
 
-	// TODO: Получить HTTP/3 stream для туннелирования
-	// Пока что создаем заглушку для MASQUE соединения
-	masqueConn := &common.MASQUEConn{
-		// TODO: Инициализировать с реальным stream
-	}
+	// Для HTTP/3 hijacking нужно использовать другой подход
+	// Пока используем упрощенную реализацию без hijacking
+	log.Printf("MASQUE CONNECT request accepted for client %s", clientID)
+
+	// Создаем MASQUE соединение без прямого доступа к stream
+	// В реальной реализации здесь должен быть HTTP/3 hijacking
+	masqueConn := common.NewMASQUEConnForServer(nil)
 
 	// Создаем сессию клиента
 	session := &ClientSession{
@@ -67,14 +82,32 @@ func (s *Server) handleMASQUERequest(w http.ResponseWriter, r *http.Request) {
 	s.IPConnMap[assignedPrefix.Addr()] = session
 	s.IPPoolMu.Unlock()
 
-	// Запускаем обработку соединения
-	go s.handleClientConnection(session, clientID, assignedPrefix.Addr())
+	// Обновляем метрики
+	s.Metrics.RecordConnection()
+	defer s.Metrics.RecordDisconnection()
 
-	// Блокируем до закрытия соединения
-	<-r.Context().Done()
-	
-	// Очищаем ресурсы
-	s.cleanupClientSession(clientID, assignedPrefix.Addr())
+	// Запускаем обработку соединения
+	s.handleClientConnection(session, clientID, assignedPrefix.Addr(), nil)
+}
+
+// isMASQUERequest проверяет, является ли запрос MASQUE CONNECT-IP
+func (s *Server) isMASQUERequest(r *http.Request) bool {
+	// Проверяем заголовки, специфичные для MASQUE
+	capsuleProtocol := r.Header.Get("Capsule-Protocol")
+	return capsuleProtocol == "?masque" || strings.Contains(r.Header.Get("Upgrade"), "masque")
+}
+
+// handleServerInfo возвращает информацию о сервере
+func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	response := fmt.Sprintf(`{
+		"service": "masque-vpn-server",
+		"version": "1.0.0",
+		"protocol": "MASQUE CONNECT-IP",
+		"network": "%s"
+	}`, s.Config.AssignCIDR)
+	w.Write([]byte(response))
 }
 
 // assignIPToClient выделяет IP адрес клиенту
@@ -98,14 +131,16 @@ func (s *Server) assignIPToClient(clientID string) (netip.Prefix, error) {
 }
 
 // handleClientConnection обрабатывает соединение с клиентом
-func (s *Server) handleClientConnection(session *ClientSession, clientID string, assignedIP netip.Addr) {
+func (s *Server) handleClientConnection(session *ClientSession, clientID string, assignedIP netip.Addr, stream interface{}) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Panic in client connection handler for %s: %v", clientID, r)
+			s.Metrics.RecordError("panic")
 		}
 	}()
 
 	log.Printf("Starting connection handler for client %s (IP: %s)", clientID, assignedIP)
+	connectionStart := time.Now()
 
 	// Создаем контекст с таймаутом
 	ctx, cancel := context.WithTimeout(context.Background(), 24*time.Hour)
@@ -115,30 +150,40 @@ func (s *Server) handleClientConnection(session *ClientSession, clientID string,
 	errChan := make(chan error, 2)
 	
 	go func() {
-		// TUN -> Client
+		// TUN -> Client proxy
 		defer func() {
 			if r := recover(); r != nil {
 				errChan <- fmt.Errorf("panic in TUN->Client proxy: %v", r)
 			}
 		}()
 		
-		// TODO: Реализовать прокси от TUN к клиенту
 		log.Printf("TUN->Client proxy started for %s", clientID)
-		<-ctx.Done()
+		
+		// Реализуем прокси от TUN к клиенту
+		if err := s.proxyTunToClient(ctx, session, assignedIP); err != nil {
+			errChan <- fmt.Errorf("TUN->Client proxy error: %w", err)
+			return
+		}
+		
 		errChan <- nil
 	}()
 
 	go func() {
-		// Client -> TUN
+		// Client -> TUN proxy
 		defer func() {
 			if r := recover(); r != nil {
 				errChan <- fmt.Errorf("panic in Client->TUN proxy: %v", r)
 			}
 		}()
 		
-		// TODO: Реализовать прокси от клиента к TUN
 		log.Printf("Client->TUN proxy started for %s", clientID)
-		<-ctx.Done()
+		
+		// Реализуем прокси от клиента к TUN
+		if err := s.proxyClientToTun(ctx, session, assignedIP); err != nil {
+			errChan <- fmt.Errorf("Client->TUN proxy error: %w", err)
+			return
+		}
+		
 		errChan <- nil
 	}()
 
@@ -147,12 +192,142 @@ func (s *Server) handleClientConnection(session *ClientSession, clientID string,
 	case err := <-errChan:
 		if err != nil {
 			log.Printf("Proxy error for client %s: %v", clientID, err)
+			s.Metrics.RecordError("proxy_error")
 		}
 	case <-ctx.Done():
 		log.Printf("Connection timeout for client %s", clientID)
+		s.Metrics.RecordError("timeout")
 	}
 
-	log.Printf("Connection handler finished for client %s", clientID)
+	// Записываем продолжительность соединения
+	duration := time.Since(connectionStart).Seconds()
+	s.Metrics.RecordConnectionDuration(duration)
+
+	log.Printf("Connection handler finished for client %s (duration: %.2fs)", clientID, duration)
+	
+	// Очищаем ресурсы
+	s.cleanupClientSession(clientID, assignedIP)
+}
+
+// proxyTunToClient проксирует пакеты от TUN устройства к клиенту
+func (s *Server) proxyTunToClient(ctx context.Context, session *ClientSession, clientIP netip.Addr) error {
+	log.Printf("Starting TUN->Client proxy for IP %s", clientIP)
+	
+	buffer := make([]byte, 2048)
+	
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("TUN->Client proxy stopped for IP %s (context cancelled)", clientIP)
+			return nil
+		default:
+		}
+		
+		// Читаем пакет из TUN устройства с таймаутом
+		n, err := s.TunDev.ReadPacket(buffer, 100) // 100ms timeout
+		if err != nil {
+			if isNetworkClosed(err) {
+				log.Printf("TUN device closed, stopping TUN->Client proxy for IP %s", clientIP)
+				return nil
+			}
+			// Игнорируем таймауты и продолжаем
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				continue
+			}
+			return fmt.Errorf("failed to read from TUN device: %w", err)
+		}
+
+		if n == 0 {
+			continue
+		}
+
+		packetData := buffer[:n]
+		
+		// Парсим IP пакет для проверки назначения
+		destIP, err := s.parseDestinationIP(packetData)
+		if err != nil {
+			continue // Пропускаем некорректные пакеты
+		}
+		
+		// Проверяем, что пакет предназначен для этого клиента
+		if destIP != clientIP {
+			continue // Пакет не для этого клиента
+		}
+
+		// Отправляем пакет клиенту через MASQUE соединение
+		if err := session.Conn.WritePacket(packetData); err != nil {
+			if isNetworkClosed(err) {
+				log.Printf("MASQUE connection closed, stopping TUN->Client proxy for IP %s", clientIP)
+				return nil
+			}
+			return fmt.Errorf("failed to write packet to MASQUE connection: %w", err)
+		}
+		
+		// Обновляем метрики
+		s.Metrics.PacketsForwarded.Inc()
+		s.Metrics.BytesForwarded.Add(float64(n))
+	}
+}
+
+// proxyClientToTun проксирует пакеты от клиента к TUN устройству
+func (s *Server) proxyClientToTun(ctx context.Context, session *ClientSession, clientIP netip.Addr) error {
+	log.Printf("Starting Client->TUN proxy for IP %s", clientIP)
+	
+	buffer := make([]byte, 2048)
+	
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("Client->TUN proxy stopped for IP %s (context cancelled)", clientIP)
+			return nil
+		default:
+		}
+		
+		// Читаем пакет от клиента через MASQUE соединение
+		n, err := session.Conn.ReadPacket(buffer)
+		if err != nil {
+			if isNetworkClosed(err) {
+				log.Printf("MASQUE connection closed, stopping Client->TUN proxy for IP %s", clientIP)
+				return nil
+			}
+			// Игнорируем таймауты и продолжаем
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				continue
+			}
+			return fmt.Errorf("failed to read from MASQUE connection: %w", err)
+		}
+
+		if n == 0 {
+			continue
+		}
+
+		packetData := buffer[:n]
+		
+		// Парсим IP пакет для проверки источника
+		srcIP, err := s.parseSourceIP(packetData)
+		if err != nil {
+			continue // Пропускаем некорректные пакеты
+		}
+		
+		// Проверяем, что пакет от правильного клиента
+		if srcIP != clientIP {
+			log.Printf("Packet from wrong source IP %s, expected %s", srcIP, clientIP)
+			continue
+		}
+
+		// Отправляем пакет в TUN устройство
+		if err := s.TunDev.WritePacket(packetData, 0); err != nil {
+			if isNetworkClosed(err) {
+				log.Printf("TUN device closed, stopping Client->TUN proxy for IP %s", clientIP)
+				return nil
+			}
+			return fmt.Errorf("failed to write packet to TUN device: %w", err)
+		}
+		
+		// Обновляем метрики
+		s.Metrics.TunPacketsWritten.Inc()
+		s.Metrics.BytesForwarded.Add(float64(n))
+	}
 }
 
 // cleanupClientSession очищает ресурсы клиентской сессии

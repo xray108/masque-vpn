@@ -6,11 +6,11 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/quic-go/quic-go"
-	"github.com/quic-go/quic-go/http3"
 	"go.uber.org/zap"
 )
 
@@ -25,23 +25,21 @@ type MASQUEClient struct {
 
 // MASQUEConn represents a MASQUE CONNECT-IP connection for IP packet tunneling
 type MASQUEConn struct {
-	stream   quic.Stream
-	client   *MASQUEClient
-	logger   *zap.Logger
-	mu       sync.RWMutex
-	closed   bool
+	Stream     *quic.Stream
+	client     *MASQUEClient
+	Logger     *zap.Logger
+	mu         sync.RWMutex
+	closed     bool
+	// Для тестирования добавляем каналы
+	readChan   chan []byte
+	writeChan  chan []byte
 }
 
 // NewMASQUEClient creates a new MASQUE client
 func NewMASQUEClient(quicConn *quic.Conn, logger *zap.Logger) *MASQUEClient {
-	// Create HTTP/3 client using the existing QUIC connection
-	roundTripper := &http3.RoundTripper{
-		// We'll use the existing connection, so no need to dial
-	}
-	
+	// Create HTTP/3 client for MASQUE requests
 	httpClient := &http.Client{
-		Transport: roundTripper,
-		Timeout:   30 * time.Second,
+		Timeout: 30 * time.Second,
 	}
 
 	return &MASQUEClient{
@@ -60,11 +58,30 @@ func (c *MASQUEClient) ConnectIP(ctx context.Context) (*MASQUEConn, error) {
 	}
 	c.mu.RUnlock()
 
-	// For MASQUE CONNECT-IP, we need to use HTTP datagrams over QUIC
-	// This is a simplified implementation - in a full implementation,
-	// we would use proper HTTP/3 CONNECT-IP method
+	if c.quicConn == nil {
+		return nil, fmt.Errorf("QUIC connection is nil")
+	}
+
+	// Create HTTP CONNECT request for MASQUE
+	serverAddr := c.quicConn.RemoteAddr().String()
 	
-	// Open a bidirectional stream for the CONNECT-IP session
+	// Create request with proper MASQUE headers
+	req, err := http.NewRequestWithContext(ctx, http.MethodConnect, serverAddr, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CONNECT request: %w", err)
+	}
+
+	// Add MASQUE-specific headers
+	req.Header.Set("Capsule-Protocol", "?masque")
+	req.Header.Set("Upgrade", "masque")
+	req.Header.Set("Connection", "Upgrade")
+	
+	c.logger.Info("Sending MASQUE CONNECT request",
+		zap.String("server_addr", serverAddr),
+		zap.String("method", req.Method))
+
+	// For now, we'll use direct QUIC stream approach
+	// In a full implementation, we would use the HTTP client
 	stream, err := c.quicConn.OpenStreamSync(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open QUIC stream: %w", err)
@@ -73,14 +90,72 @@ func (c *MASQUEClient) ConnectIP(ctx context.Context) (*MASQUEConn, error) {
 	c.logger.Info("Opened QUIC stream for MASQUE CONNECT-IP session",
 		zap.Uint64("stream_id", uint64(stream.StreamID())))
 
-	// In a real implementation, we would send proper HTTP/3 CONNECT-IP request
-	// For now, we'll use the stream directly for IP packet tunneling
+	// Send a simplified CONNECT request over the stream
+	connectReq := fmt.Sprintf("CONNECT %s HTTP/1.1\r\n", serverAddr) +
+		"Capsule-Protocol: ?masque\r\n" +
+		"Upgrade: masque\r\n" +
+		"Connection: Upgrade\r\n" +
+		"\r\n"
+
+	if _, err := stream.Write([]byte(connectReq)); err != nil {
+		stream.Close()
+		return nil, fmt.Errorf("failed to send CONNECT request: %w", err)
+	}
+
+	// Read response
+	respBuf := make([]byte, 1024)
+	n, err := stream.Read(respBuf)
+	if err != nil {
+		stream.Close()
+		return nil, fmt.Errorf("failed to read CONNECT response: %w", err)
+	}
+
+	response := string(respBuf[:n])
+	c.logger.Debug("MASQUE CONNECT response", zap.String("response", response))
+
+	// Check for successful response (HTTP 200)
+	if !strings.Contains(response, "200") && !strings.Contains(response, "OK") {
+		stream.Close()
+		return nil, fmt.Errorf("MASQUE CONNECT request failed: %s", response)
+	}
+
+	c.logger.Info("MASQUE CONNECT-IP session established successfully")
 	
 	return &MASQUEConn{
-		stream: stream,
-		client: c,
-		logger: c.logger,
+		Stream:    stream,
+		client:    c,
+		Logger:    c.logger,
+		readChan:  make(chan []byte, 100),
+		writeChan: make(chan []byte, 100),
 	}, nil
+}
+
+// NewMASQUEConnForServer creates a new MASQUE connection for server side
+func NewMASQUEConnForServer(logger *zap.Logger) *MASQUEConn {
+	// Для тестирования создаем связанные каналы
+	readChan := make(chan []byte, 100)
+	writeChan := make(chan []byte, 100)
+	
+	conn := &MASQUEConn{
+		Stream:    nil,
+		client:    nil,
+		Logger:    logger,
+		readChan:  readChan,
+		writeChan: writeChan,
+	}
+	
+	// Запускаем горутину для связывания каналов (для тестирования)
+	go func() {
+		for packet := range writeChan {
+			select {
+			case readChan <- packet:
+			default:
+				// Канал заполнен, пропускаем пакет
+			}
+		}
+	}()
+	
+	return conn
 }
 
 // Close closes the MASQUE client
@@ -92,6 +167,10 @@ func (c *MASQUEClient) Close() error {
 		return nil
 	}
 	c.closed = true
+
+	if c.quicConn == nil {
+		return fmt.Errorf("QUIC connection is nil")
+	}
 
 	return c.quicConn.CloseWithError(0, "client shutdown")
 }
@@ -105,20 +184,31 @@ func (m *MASQUEConn) ReadPacket(buf []byte) (int, error) {
 	}
 	m.mu.RUnlock()
 
-	// Set read deadline to prevent blocking indefinitely
-	if err := m.stream.SetReadDeadline(time.Now().Add(30 * time.Second)); err != nil {
-		return 0, fmt.Errorf("failed to set read deadline: %w", err)
-	}
-
-	n, err := m.stream.Read(buf)
-	if err != nil {
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			return 0, fmt.Errorf("read timeout: %w", err)
+	// Если есть stream, используем его
+	if m.Stream != nil {
+		// Set read deadline to prevent blocking indefinitely
+		if err := m.Stream.SetReadDeadline(time.Now().Add(30 * time.Second)); err != nil {
+			return 0, fmt.Errorf("failed to set read deadline: %w", err)
 		}
-		return 0, fmt.Errorf("failed to read from MASQUE stream: %w", err)
+
+		n, err := m.Stream.Read(buf)
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				return 0, fmt.Errorf("read timeout: %w", err)
+			}
+			return 0, fmt.Errorf("failed to read from MASQUE stream: %w", err)
+		}
+		return n, nil
 	}
 
-	return n, nil
+	// Иначе используем канал для тестирования
+	select {
+	case packet := <-m.readChan:
+		n := copy(buf, packet)
+		return n, nil
+	case <-time.After(30 * time.Second):
+		return 0, fmt.Errorf("read timeout")
+	}
 }
 
 // WritePacket writes an IP packet to the MASQUE connection
@@ -130,17 +220,30 @@ func (m *MASQUEConn) WritePacket(packet []byte) error {
 	}
 	m.mu.RUnlock()
 
-	// Set write deadline to prevent blocking indefinitely
-	if err := m.stream.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
-		return fmt.Errorf("failed to set write deadline: %w", err)
+	// Если есть stream, используем его
+	if m.Stream != nil {
+		// Set write deadline to prevent blocking indefinitely
+		if err := m.Stream.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+			return fmt.Errorf("failed to set write deadline: %w", err)
+		}
+
+		_, err := m.Stream.Write(packet)
+		if err != nil {
+			return fmt.Errorf("failed to write to MASQUE stream: %w", err)
+		}
+		return nil
 	}
 
-	_, err := m.stream.Write(packet)
-	if err != nil {
-		return fmt.Errorf("failed to write to MASQUE stream: %w", err)
+	// Иначе используем канал для тестирования
+	packetCopy := make([]byte, len(packet))
+	copy(packetCopy, packet)
+	
+	select {
+	case m.writeChan <- packetCopy:
+		return nil
+	case <-time.After(10 * time.Second):
+		return fmt.Errorf("write timeout")
 	}
-
-	return nil
 }
 
 // Close closes the MASQUE connection
@@ -153,7 +256,19 @@ func (m *MASQUEConn) Close() error {
 	}
 	m.closed = true
 
-	return m.stream.Close()
+	// Закрываем каналы
+	if m.readChan != nil {
+		close(m.readChan)
+	}
+	if m.writeChan != nil {
+		close(m.writeChan)
+	}
+
+	// Закрываем stream если есть
+	if m.Stream != nil {
+		return m.Stream.Close()
+	}
+	return nil
 }
 
 // LocalAddr returns the local address (not applicable for MASQUE)
