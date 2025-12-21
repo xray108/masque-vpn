@@ -65,20 +65,11 @@ func (c *MASQUEClient) ConnectIP(ctx context.Context) (*MASQUEConn, error) {
 	// Create HTTP CONNECT request for MASQUE
 	serverAddr := c.quicConn.RemoteAddr().String()
 	
-	// Create request with proper MASQUE headers
-	req, err := http.NewRequestWithContext(ctx, http.MethodConnect, serverAddr, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create CONNECT request: %w", err)
-	}
-
-	// Add MASQUE-specific headers
-	req.Header.Set("Capsule-Protocol", "?masque")
-	req.Header.Set("Upgrade", "masque")
-	req.Header.Set("Connection", "Upgrade")
-	
+	// For HTTP CONNECT, we don't need a full URL, just the target address
+	// But since we're using direct QUIC stream, we'll skip the HTTP client approach
 	c.logger.Info("Sending MASQUE CONNECT request",
 		zap.String("server_addr", serverAddr),
-		zap.String("method", req.Method))
+		zap.String("method", "CONNECT"))
 
 	// For now, we'll use direct QUIC stream approach
 	// In a full implementation, we would use the HTTP client
