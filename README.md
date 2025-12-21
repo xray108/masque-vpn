@@ -309,6 +309,15 @@ curl http://127.0.0.1:8080/api/v1/logs
 - **QUIC Transport**: [RFC 9000](https://datatracker.ietf.org/doc/html/rfc9000) - QUIC транспорт
 - **HTTP/3**: [RFC 9114](https://datatracker.ietf.org/doc/html/rfc9114) - HTTP/3 протокол
 
+## Лицензия и авторские права
+
+Этот проект распространяется под лицензией MIT.
+
+**Copyright (c) 2025 CloudBridge Research / 2GC Network Protocol Suite**  
+**Copyright (c) 2025 Original Authors (iselt/masque-vpn)**
+
+Проект основан на оригинальной работе [iselt/masque-vpn](https://github.com/iselt/masque-vpn) и развивается CloudBridge Research для образовательных и исследовательских целей.
+
 ## Поддержка
 
 Для вопросов и сотрудничества:

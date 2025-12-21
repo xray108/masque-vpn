@@ -219,6 +219,15 @@ cd tests/load && go test -v
 - **QUIC 传输**: [RFC 9000](https://datatracker.ietf.org/doc/html/rfc9000) - QUIC 传输
 - **HTTP/3**: [RFC 9114](https://datatracker.ietf.org/doc/html/rfc9114) - HTTP/3 协议
 
+## 许可证和版权
+
+本项目在 MIT 许可证下分发。
+
+**Copyright (c) 2025 CloudBridge Research / 2GC Network Protocol Suite**  
+**Copyright (c) 2025 Original Authors (iselt/masque-vpn)**
+
+本项目基于原始工作 [iselt/masque-vpn](https://github.com/iselt/masque-vpn)，由 CloudBridge Research 为教育和研究目的开发。
+
 ## 支持
 
 如有问题和合作：

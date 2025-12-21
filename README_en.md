@@ -309,6 +309,15 @@ This project is created for educational purposes. Contributions welcome for:
 - **QUIC Transport**: [RFC 9000](https://datatracker.ietf.org/doc/html/rfc9000) - QUIC transport
 - **HTTP/3**: [RFC 9114](https://datatracker.ietf.org/doc/html/rfc9114) - HTTP/3 protocol
 
+## License and Copyright
+
+This project is distributed under the MIT License.
+
+**Copyright (c) 2025 CloudBridge Research / 2GC Network Protocol Suite**  
+**Copyright (c) 2025 Original Authors (iselt/masque-vpn)**
+
+This project is based on the original work [iselt/masque-vpn](https://github.com/iselt/masque-vpn) and is developed by CloudBridge Research for educational and research purposes.
+
 ## Support
 
 For questions and collaboration:
