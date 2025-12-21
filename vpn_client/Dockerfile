@@ -12,15 +12,15 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 # Copy go mod files
-COPY go.mod go.sum ./
-COPY ../common/go.mod ../common/go.sum ../common/
+COPY vpn_client/go.mod vpn_client/go.sum ./
+COPY common/go.mod common/go.sum ../common/
 
 # Download dependencies
 RUN go mod download
 
 # Copy source code
-COPY . .
-COPY ../common ../common/
+COPY vpn_client/ .
+COPY common/ ../common/
 
 # Build the application
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o vpn-client .

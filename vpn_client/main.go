@@ -214,17 +214,28 @@ func main() {
 		errChan := make(chan error, 2)
 		var proxyWg sync.WaitGroup
 
-		proxyWg.Add(2)
-		go func() {
-			defer proxyWg.Done()
-			logger.Debug("Starting TUN to VPN proxy")
-			common.ProxyFromTunToMASQUE(tunDev, masqueConn, errChan, &clientConfig.FEC)
-		}()
-		go func() {
-			defer proxyWg.Done()
-			logger.Debug("Starting VPN to TUN proxy")
-			common.ProxyFromMASQUEToTun(tunDev, masqueConn, errChan, &clientConfig.FEC)
-		}()
+		if tunDev != nil {
+			proxyWg.Add(2)
+			go func() {
+				defer proxyWg.Done()
+				logger.Debug("Starting TUN to VPN proxy")
+				common.ProxyFromTunToMASQUE(tunDev, masqueConn, errChan, &clientConfig.FEC)
+			}()
+			go func() {
+				defer proxyWg.Done()
+				logger.Debug("Starting VPN to TUN proxy")
+				common.ProxyFromMASQUEToTun(tunDev, masqueConn, errChan, &clientConfig.FEC)
+			}()
+		} else {
+			logger.Info("TUN device disabled, proxy goroutines not started")
+			// Просто ждем сигнала завершения
+			proxyWg.Add(1)
+			go func() {
+				defer proxyWg.Done()
+				<-ctx.Done()
+				logger.Info("Test mode: received shutdown signal")
+			}()
+		}
 
 		// Wait for error or shutdown signal
 		select {
@@ -398,22 +409,27 @@ func establishAndConfigure(ctx context.Context) (*common.TUNDevice, *common.MASQ
 		zap.String("tun_name", clientConfig.TunName),
 		zap.Int("mtu", clientConfig.MTU))
 
-	dev, err := common.CreateTunDevice(clientConfig.TunName, *assignedPrefix, clientConfig.MTU)
-	if err != nil {
-		masqueConn.Close()
-		return nil, nil, fmt.Errorf("failed to create and configure TUN device: %w", err)
-	}
-	logger.Info("TUN device configured successfully", 
-		zap.String("device_name", dev.Name()),
-		zap.String("assigned_ip", assignedIP))
+	var dev *common.TUNDevice
+	if clientConfig.TunName != "" {
+		dev, err = common.CreateTunDevice(clientConfig.TunName, *assignedPrefix, clientConfig.MTU)
+		if err != nil {
+			masqueConn.Close()
+			return nil, nil, fmt.Errorf("failed to create and configure TUN device: %w", err)
+		}
+		logger.Info("TUN device configured successfully", 
+			zap.String("device_name", dev.Name()),
+			zap.String("assigned_ip", assignedIP))
 
-	// Add default route through VPN
-	defaultRoute := "0.0.0.0/0"
-	_, defaultNet, _ := net.ParseCIDR(defaultRoute)
-	if err := dev.AddRoute(*defaultNet); err != nil {
-		logger.Warn("Failed to add default route", zap.Error(err))
+		// Add default route through VPN
+		defaultRoute := "0.0.0.0/0"
+		_, defaultNet, _ := net.ParseCIDR(defaultRoute)
+		if err := dev.AddRoute(*defaultNet); err != nil {
+			logger.Warn("Failed to add default route", zap.Error(err))
+		} else {
+			logger.Info("Added default route through VPN")
+		}
 	} else {
-		logger.Info("Added default route through VPN")
+		logger.Info("TUN device disabled (empty tun_name)")
 	}
 
 	return dev, masqueConn, nil

@@ -1,0 +1,34 @@
+# MASQUE VPN Client Configuration - Local Testing
+
+# VPN server address (IP:Port)
+server_addr = "127.0.0.1:4433"
+
+# Server name
+server_name = "masque-vpn-server"
+
+# CA certificate file path
+ca_file = "cert/ca.crt"
+
+# Client certificate file path (mTLS)
+tls_cert = "cert/client.crt"
+
+# Client private key file path (mTLS)
+tls_key = "cert/client.key"
+
+# Skip server certificate verification (для локального тестирования)
+insecure_skip_verify = true
+
+# TUN device configuration - отключаем для локального тестирования
+tun_name = ""
+
+# Logging configuration
+log_level = "debug"
+
+# Maximum Transmission Unit
+mtu = 1413
+
+# Forward Error Correction (FEC) configuration
+[fec]
+enabled = false
+redundancy = 0.1
+block_size = 20
