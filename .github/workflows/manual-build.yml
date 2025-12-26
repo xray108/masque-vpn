@@ -1,0 +1,56 @@
+name: Manual build (server linux + client windows)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build server (linux) and client (windows)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          echo "Go version:"
+          go version
+
+          # sanity check
+          go list ./vpn_server >/dev/null
+          go list ./vpn_client >/dev/null
+
+          echo "🔨 Building vpn_server -> linux/amd64"
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+            go build -trimpath -ldflags "-s -w" \
+            -o dist/masque-vpn-server_linux_amd64 \
+            ./vpn_server
+
+          echo "🔨 Building vpn_client -> windows/amd64"
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
+            go build -trimpath -ldflags "-s -w" \
+            -o dist/masque-vpn-client_windows_amd64.exe \
+            ./vpn_client
+
+          echo "✅ Build result:"
+          ls -la dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: masque-vpn-manual-build
+          path: dist/
+          if-no-files-found: error
