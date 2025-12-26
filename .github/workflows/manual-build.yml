@@ -14,38 +14,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Ставим Go один раз (версии хватит для обоих модулей)
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: "1.25.x"
           cache: true
 
-      - name: Build server (linux) and client (windows)
+      - name: Build vpn_server (linux/amd64)
+        shell: bash
+        working-directory: vpn_server
+        run: |
+          set -euo pipefail
+          go version
+          test -f go.mod || (echo "❌ vpn_server/go.mod не найден" && exit 1)
+
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+            go build -trimpath -ldflags "-s -w" \
+            -o ../dist/masque-vpn-server_linux_amd64 \
+            .
+
+      - name: Build vpn_client (windows/amd64)
+        shell: bash
+        working-directory: vpn_client
+        run: |
+          set -euo pipefail
+          go version
+          test -f go.mod || (echo "❌ vpn_client/go.mod не найден" && exit 1)
+
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
+            go build -trimpath -ldflags "-s -w" \
+            -o ../dist/masque-vpn-client_windows_amd64.exe \
+            .
+
+      - name: List outputs
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist
-
-          echo "Go version:"
-          go version
-
-          # sanity check
-          go list ./vpn_server >/dev/null
-          go list ./vpn_client >/dev/null
-
-          echo "🔨 Building vpn_server -> linux/amd64"
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
-            go build -trimpath -ldflags "-s -w" \
-            -o dist/masque-vpn-server_linux_amd64 \
-            ./vpn_server
-
-          echo "🔨 Building vpn_client -> windows/amd64"
-          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
-            go build -trimpath -ldflags "-s -w" \
-            -o dist/masque-vpn-client_windows_amd64.exe \
-            ./vpn_client
-
-          echo "✅ Build result:"
           ls -la dist
 
       - name: Upload artifact
